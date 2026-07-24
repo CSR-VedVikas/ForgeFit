@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: .
+      target: backend
+    env_file:
+      - ./backend/.env
+    environment:
+      ENVIRONMENT: production
+      ENABLE_DOCS: "false"
+      DATABASE_URL: sqlite:////data/forgefit.db
+      CORS_ORIGINS: http://localhost,http://127.0.0.1
+    volumes:
+      - forgefit_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  web:
+    build:
+      context: .
+      target: web
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  forgefit_data:
