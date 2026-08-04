@@ -21,7 +21,34 @@ class User(Base):
     achievements: Mapped[list["Achievement"]] = relationship(back_populates="user")
     challenges: Mapped[list["ChallengeProgress"]] = relationship(back_populates="user")
     reset_tokens: Mapped[list["PasswordResetToken"]] = relationship(back_populates="user")
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
     routines: Mapped[list["Routine"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+class RefreshToken(Base):
+    """PR5 — one row per issued refresh token, so logout can actually revoke.
+
+    The raw token never lands here; only its SHA-256. `jti` is the claim
+    carried in the JWT and is what a lookup keys on, which means a stolen
+    token can be killed without touching the user's other sessions.
+    Rotation: refreshing marks the presented row `revoked` and writes a new
+    one, so a replayed token is detectably already-revoked.
+    """
+
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    jti: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    user_agent: Mapped[str] = mapped_column(String(255), default="")
+
+    user: Mapped["User"] = relationship(back_populates="refresh_tokens")
 
 
 class PasswordResetToken(Base):
