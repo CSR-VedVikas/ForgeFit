@@ -14,5 +14,8 @@ rapidfuzz==3.11.0
 slowapi==0.1.9
 sentry-sdk[fastapi]==2.19.2
 alembic==1.14.0
+# PR6 — PostgreSQL driver. SQLite will not take concurrent writes across
+# uvicorn workers; the production config validator rejects it outright.
+psycopg[binary]==3.2.3
 pytest==8.3.4
 pytest-asyncio==0.25.0
