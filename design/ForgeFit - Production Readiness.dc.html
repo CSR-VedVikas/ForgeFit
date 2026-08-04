@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/modernist-3421fc7c-a372-4f31-85f2-c810cb3fe539/styles.css">
+<script src="_ds/modernist-3421fc7c-a372-4f31-85f2-c810cb3fe539/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="./doc-page.js"></script>
+<style>
+doc-page:not(:defined){visibility:hidden}
+body{margin:0;font-family:Archivo,system-ui,sans-serif;color:#201e1d}
+a{color:#ae1800}a:hover{color:#7c1405}
+h1,h2,h3{margin:0}
+p{margin:0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
+</style>
+</helmet>
+
+<doc-page margin="0.7in">
+
+  <div slot="footer" style="display:flex;align-items:baseline;justify-content:space-between;border-top:2px solid #201e1d;padding-top:7px;font-size:9pt;letter-spacing:.1em;text-transform:uppercase">
+    <span>ForgeFit — Production Readiness</span>
+    <span style="color:rgba(32,30,29,.55)">4 Aug 2026</span>
+  </div>
+
+  <div style="border-bottom:2px solid #201e1d;padding-bottom:16px;margin-bottom:22px">
+    <div style="font-weight:800;font-size:9.5pt;letter-spacing:.2em;text-transform:uppercase;color:#ae1800;margin-bottom:14px">Read against the code, 4 August</div>
+    <h1 style="font-weight:800;font-size:33pt;line-height:1.03;letter-spacing:-.025em;margin-bottom:12px">Eleven things stand<br>between here and live</h1>
+    <p style="font-size:12pt;line-height:1.55;max-width:44em;color:rgba(32,30,29,.78);text-wrap:pretty">Every item below was read off the backend as it exists today — <code>app/config.py</code>, <code>app/auth.py</code>, <code>app/main.py</code>, <code>app/db.py</code>, <code>deploy/nginx.conf</code> — not carried over from the July audit. The audit turns out to be stale in the good direction: most of what it flagged has since been fixed in the repo. What replaces it is a shorter list, and one item on it needs doing before you read the rest of this page.</p>
+  </div>
+
+  <div style="border:2px solid #ec3013;margin-bottom:24px;break-inside:avoid">
+    <div style="background:#ec3013;color:#fff;padding:9px 14px;font-weight:800;font-size:10pt;letter-spacing:.16em;text-transform:uppercase">Do this first — today</div>
+    <div style="padding:13px 14px;font-size:10.5pt;line-height:1.55">
+      <p style="margin-bottom:8px"><strong><code>backend/.env</code> holds three live credentials in plain text:</strong> an OpenAI project key, a Nutritionix live key, and the JWT signing secret. The file sits in the working tree beside <code>.env.example</code>.</p>
+      <p style="margin-bottom:8px">Rotate all three at the provider today, whether or not the file was ever pushed. An exposed OpenAI project key is a billing liability, and a leaked <code>JWT_SECRET</code> lets anyone mint a token for any <code>user_id</code> — every account, silently, with no trace in the logs.</p>
+      <p style="margin-bottom:0">Then: confirm <code>.env</code> is in <code>.gitignore</code>; if it was ever committed, purge it from history rather than deleting it in a new commit; and move the production values out of the repo entirely — a systemd <code>EnvironmentFile</code> outside the checkout, or your host's secret store. <code>forgefit.db</code> and <code>forgefit_clean.db</code> are in the tree too and carry user rows and password hashes; they belong in <code>.gitignore</code> as well.</p>
+    </div>
+  </div>
+
+  <h2 style="font-weight:800;font-size:15pt;letter-spacing:-.01em;text-transform:uppercase;border-bottom:2px solid #201e1d;padding-bottom:7px;margin-bottom:12px">1 · What the July audit flagged and the repo has since fixed</h2>
+
+  <p style="font-size:10.5pt;line-height:1.55;margin-bottom:9px;max-width:44em;text-wrap:pretty">Worth stating plainly, because it changes the size of the remaining job. The backend is further along than the completion plan assumed.</p>
+
+  <table class="table" style="width:100%;font-size:9.5pt;margin-bottom:18px">
+    <tbody>
+      <tr><td style="width:30%;font-weight:800">Interactive docs exposed</td><td>Fixed. <code>main.py</code> sets <code>docs_url</code> and <code>redoc_url</code> to <code>None</code> whenever <code>is_production</code>, regardless of <code>enable_docs</code></td></tr>
+      <tr><td style="font-weight:800">Stack traces to clients</td><td>Fixed. The catch-all handler logs the exception and returns a bare <code>{"detail": "Internal server error"}</code></td></tr>
+      <tr><td style="font-weight:800">No rate limiting</td><td>Fixed. slowapi at 120/min default, 10/min on auth, 20/min on the NLP route, with the 429 handler mounted</td></tr>
+      <tr><td style="font-weight:800">No security headers</td><td>Fixed. <code>SecurityHeadersMiddleware</code> sets nosniff, <code>X-Frame-Options: DENY</code>, a referrer policy, a permissions policy, and HSTS on https</td></tr>
+      <tr><td style="font-weight:800">Password reset leaked the token</td><td>Fixed (S1). Tokens are hashed at rest, single-use, prior unused ones invalidated on reissue, and the response is identical whether or not the account exists</td></tr>
+      <tr><td style="font-weight:800">No request correlation</td><td>Fixed. Structured JSON logs with an <code>X-Request-ID</code> echoed on every response, plus Sentry when a DSN is set</td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="font-weight:800;font-size:15pt;letter-spacing:-.01em;text-transform:uppercase;border-bottom:2px solid #201e1d;padding-bottom:7px;margin-bottom:12px">2 · What actually blocks the release</h2>
+
+  <table class="table" style="width:100%;font-size:9.5pt;margin-bottom:18px">
+    <thead>
+      <tr><th style="width:7%">#</th><th style="width:27%">Blocker</th><th>Where, and the fix</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="font-weight:800;color:#ec3013">PR1</td>
+        <td style="font-weight:800">Live secrets in the tree</td>
+        <td>See the panel above. Rotate, gitignore, move out of the checkout</td>
+      </tr>
+      <tr>
+        <td style="font-weight:800;color:#ec3013">PR2</td>
+        <td style="font-weight:800">Nothing refuses to boot with dev config</td>
+        <td><code>config.py</code> defaults <code>jwt_secret</code> to <code>"dev-secret-change-me"</code>. A production deploy that forgets one env var starts happily and signs tokens with a value that is public in the source. Add a pydantic <code>model_validator</code> that raises on start when <code>is_production</code> and any of: the secret is the default or under 32 chars, <code>database_url</code> is sqlite, <code>enable_docs</code> is true. Failing to boot is the correct behaviour — a misconfigured server that runs is worse than one that doesn't</td>
+      </tr>
+      <tr>
+        <td style="font-weight:800;color:#ec3013">PR3</td>
+        <td style="font-weight:800">CORS regex survives into production</td>
+        <td><code>cors_origin_regex</code> <em>defaults</em> to the LAN development pattern, and <code>main.py</code> passes it whenever it is non-empty, alongside <code>allow_credentials=True</code>. Any host on a private-range address at :5173, :4173 or :8080 is a trusted, credentialed origin — including an attacker on the same coffee-shop network. Force it to <code>None</code> when <code>is_production</code> and require an explicit allowlist</td>
+      </tr>
+      <tr>
+        <td style="font-weight:800;color:#ec3013">PR4</td>
+        <td style="font-weight:800">Two sources of schema truth</td>
+        <td><code>main.py</code> calls <code>Base.metadata.create_all(bind=engine)</code> on every startup while <code>alembic/versions/0001_initial.py</code> exists. <code>create_all</code> creates missing tables but never alters existing ones, so migrations look unnecessary right up until the first <code>ALTER</code> — which is the N1–N5 migration — and then the schema silently drifts per environment. Delete the <code>create_all</code> call; make <code>alembic upgrade head</code> a deploy step</td>
+      </tr>
+      <tr>
+        <td style="font-weight:800;color:#ec3013">PR5</td>
+        <td style="font-weight:800">No refresh token, no revocation</td>
+        <td><code>config.py</code> carries <code>refresh_token_expire_minutes</code>, but <code>auth.py</code> only ever mints an access token, and <code>routers/auth.py</code> has no refresh route. At the 60-minute default a user is signed out mid-workout, roughly hourly. There is also no <code>jti</code> and no denylist, so logout is client-side only and a stolen token stays valid its full life. This is the decision that gates the frontend wiring — see §4</td>
+      </tr>
+      <tr>
+        <td style="font-weight:800">PR6</td>
+        <td style="font-weight:800">SQLite</td>
+        <td><code>db.py</code> opens a single file with <code>check_same_thread=False</code>. It will not take concurrent writes across uvicorn workers; a set logged during a nutrition write can hit <em>database is locked</em>. Postgres before launch, and <code>0001_initial</code> re-run against it rather than a copied file</td>
+      </tr>
+      <tr>
+        <td style="font-weight:800">PR7</td>
+        <td style="font-weight:800">No TLS at the edge</td>
+        <td><code>deploy/nginx.conf</code> listens on 80 only. HSTS in the app is conditional on <code>request.url.scheme == "https"</code>, so today it never fires. Add the TLS server block and the 80→443 redirect, plus <code>client_max_body_size</code> and gzip on <code>/api/</code></td>
+      </tr>
+      <tr>
+        <td style="font-weight:800">PR8</td>
+        <td style="font-weight:800">Silent password truncation</td>
+        <td><code>auth.py</code> hashes <code>password[:72]</code>. A user with a 100-character passphrase is authenticated on its first 72 characters, and two different passphrases sharing a prefix both work. Reject over-72-byte passwords at the schema, or SHA-256 pre-hash before bcrypt. Small, but it is a silent weakening of exactly the users who chose the strongest passwords</td>
+      </tr>
+      <tr>
+        <td style="font-weight:800">PR9</td>
+        <td style="font-weight:800">Naive UTC timestamps</td>
+        <td><code>auth.py</code> uses <code>datetime.utcnow()</code> — deprecated in 3.12 and timezone-naive. Move to <code>datetime.now(timezone.utc)</code> before it meets a non-UTC host</td>
+      </tr>
+      <tr>
+        <td style="font-weight:800">PR10</td>
+        <td style="font-weight:800">Wrong nutrition base URL in <code>.env</code></td>
+        <td>The committed <code>.env</code> points <code>NUTRITION_API_BASE_URL</code> at the provider's <code>/docs</code> page, where <code>config.py</code> defaults to <code>/v2</code>. Any environment loading that file sends food lookups to a documentation page. Config bug rather than a security one, but it will read as a broken Fuel screen</td>
+      </tr>
+      <tr>
+        <td style="font-weight:800">PR11</td>
+        <td style="font-weight:800">Rate limiting is per-IP only</td>
+        <td><code>rate_limit.py</code> keys on <code>get_remote_address</code>. Behind the nginx proxy every request arrives from the proxy's address unless the app is told to trust <code>X-Forwarded-For</code>, which collapses all users into one bucket. Run uvicorn with <code>--proxy-headers</code> and a trusted-host list, and verify the limiter sees real client IPs before you rely on the 10/min auth limit</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 style="font-weight:800;font-size:15pt;letter-spacing:-.01em;text-transform:uppercase;border-bottom:2px solid #201e1d;padding-bottom:7px;margin-bottom:12px">3 · The order to do them in</h2>
+
+  <p style="font-size:10.5pt;line-height:1.55;margin-bottom:11px;max-width:44em;text-wrap:pretty">The ordering is not by severity. It is by what would have to be redone if taken later — PR5 changes how every screen holds a session, so it precedes the wiring; PR4 precedes the migration because running the migration under <code>create_all</code> is how environments diverge.</p>
+
+  <div style="border:2px solid #201e1d;margin-bottom:18px;break-inside:avoid">
+    <div style="background:#201e1d;color:#f3f2f2;padding:8px 14px;font-weight:800;font-size:9pt;letter-spacing:.16em;text-transform:uppercase">Sequence</div>
+    <div style="padding:12px 14px;font-size:10.5pt;line-height:1.55">
+      <p style="margin-bottom:7px"><strong>Today — PR1.</strong> Rotate the three credentials, gitignore <code>.env</code> and the two <code>.db</code> files, purge from history if needed. Nothing else on this page matters while a live OpenAI key is in a checkout.</p>
+      <p style="margin-bottom:7px"><strong>Day 1 — PR2, PR3, PR4, PR10, PR11.</strong> Config guards, the CORS default, drop <code>create_all</code>, fix the base URL, prove the limiter sees real IPs. All small, all in three files. After this the app is safe to put on a network.</p>
+      <p style="margin-bottom:7px"><strong>Days 2–4 — PR5, PR8, PR9.</strong> Settle the token model: refresh route, <code>jti</code> plus a denylist table, logout that actually revokes. Decide storage at the same time — see §4. Password and timestamp fixes ride along.</p>
+      <p style="margin-bottom:7px"><strong>Days 5–17 — wiring.</strong> Read-only screens, then writes, then the single migration carrying N1–N5, the records gap R1, and W1, then the queue-backed screens, then Fuel. The frontend contract is already written: <code>frontend-api/client.js</code>, <code>endpoints.js</code>, <code>session-queue.js</code>, against the 32 endpoints in the Track B document.</p>
+      <p style="margin-bottom:0"><strong>Days 18–25 — PR6, PR7.</strong> Postgres, TLS, packaging, a restore-from-backup rehearsal, and the release checks.</p>
+    </div>
+  </div>
+
+  <h2 style="font-weight:800;font-size:15pt;letter-spacing:-.01em;text-transform:uppercase;border-bottom:2px solid #201e1d;padding-bottom:7px;margin-bottom:12px">4 · The one decision that is still yours</h2>
+
+  <p style="font-size:10.5pt;line-height:1.55;margin-bottom:9px;max-width:44em;text-wrap:pretty">Where the token lives, and it has to be answered before day 2 because everything downstream inherits it. <strong>httpOnly cookie:</strong> immune to XSS token theft, needs CSRF protection and a same-site story, and constrains the store-app path. <strong>Bearer token in storage:</strong> what <code>frontend-api/client.js</code> is written against today, simplest to wire, and readable by any script that gets onto the page. If ForgeFit ships as a store app rather than a web app, the answer is the platform keychain and neither of the above — which is why the web-or-store question, still open from 28 July, has to be settled in the same conversation.</p>
+
+  <p style="font-size:10.5pt;line-height:1.55;margin-bottom:9px;max-width:44em;text-wrap:pretty">Everything else is specified. Nine schema gaps with the smallest fix for each, 32 endpoints mapped field by field to nine screens, and a designed state for every condition the app can be in — cold cache, unreachable server, expired session, queued writes, read-only past days, server refusals, empty ranges.</p>
+
+  <p style="font-size:10.5pt;line-height:1.55;margin-bottom:0;max-width:44em;text-wrap:pretty">What none of it is, yet, is wired. The prototype runs on fixtures, and the honest read of this page is that the design and the specification are release-ready while the service is about three weeks and one owner away. PR1 is the exception to the schedule: it is not three weeks away, it is today.</p>
+
+</doc-page>
+</x-dc>
+</body>
+</html>

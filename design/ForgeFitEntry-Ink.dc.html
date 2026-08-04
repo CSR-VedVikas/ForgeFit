@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="stylesheet" href="_ds/modernist-3421fc7c-a372-4f31-85f2-c810cb3fe539/styles.css">
+<script src="_ds/modernist-3421fc7c-a372-4f31-85f2-c810cb3fe539/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Archivo,system-ui,sans-serif}
+a{color:#ff563c}a:hover{color:#ffb3a3}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+input,button{-webkit-tap-highlight-color:transparent}
+::selection{background:rgba(255,86,60,.3)}
+</style>
+</helmet>
+
+<div style="height:100%;min-height:100%;display:flex;flex-direction:column;background:#171615;color:#f3f2f2;font-family:Archivo,system-ui,sans-serif;font-size:15px;-webkit-font-smoothing:antialiased">
+
+  <div style="flex:none;height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:2px solid #f3f2f2">
+    <span style="font-weight:800;font-size:15px;letter-spacing:.14em;text-transform:uppercase">Forgefit</span>
+    <button style="font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#ff563c" onClick="{{ toggle }}">{{ navLabel }}</button>
+  </div>
+
+  <div style="flex:1;overflow:auto">
+
+    <sc-if value="{{ isLanding }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <div style="padding:22px 16px 20px;border-bottom:2px solid #4a4645">
+          <div style="font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:#ff563c">Iron · Intent · Progress</div>
+          <h1 style="font-weight:800;font-size:74px;line-height:.86;letter-spacing:-.045em;margin:10px 0 0;text-transform:uppercase">Forge<br>Fit</h1>
+          <div style="height:2px;background:#f3f2f2;margin:16px 0 14px;width:88px"></div>
+          <div style="font-weight:800;font-size:19px;line-height:1.18;letter-spacing:-.01em;max-width:22ch">Train harder. Track cleaner. Break records.</div>
+          <p style="margin:9px 0 0;font-size:13px;line-height:1.6;color:#a5a09e;max-width:36ch">Log sets, meals and cardio in plain English. 1,324 form illustrations, every PR, one screen while you lift.</p>
+          <button style="display:flex;align-items:center;justify-content:space-between;width:100%;height:52px;padding:0 14px;margin-top:18px;background:#ff563c;color:#1a0f0c;font-weight:800;font-size:11px;letter-spacing:.16em;text-transform:uppercase" onClick="{{ toSignup }}">
+            <span>Create an account</span><span style="font-size:15px">→</span>
+          </button>
+          <button style="display:flex;align-items:center;width:100%;height:48px;padding:0 14px;margin-top:8px;border:1px solid #4a4645;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase" onClick="{{ toSignin }}">I already train here</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);border-bottom:2px solid #4a4645">
+          <div style="padding:12px 14px;border-right:1px solid #35312f"><div style="font-weight:800;font-size:22px;letter-spacing:-.02em;font-variant-numeric:tabular-nums">1,324</div><div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#a5a09e">Exercises</div></div>
+          <div style="padding:12px 14px;border-right:1px solid #35312f"><div style="font-weight:800;font-size:22px;letter-spacing:-.02em;font-variant-numeric:tabular-nums">90s</div><div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#a5a09e">Auto rest</div></div>
+          <div style="padding:12px 14px"><div style="font-weight:800;font-size:22px;letter-spacing:-.02em;font-variant-numeric:tabular-nums">0</div><div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:#a5a09e">Ads</div></div>
+        </div>
+
+        <div style="display:flex;gap:1px;background:#35312f;border-bottom:2px solid #4a4645;filter:grayscale(1) contrast(1.08)">
+          <div style="flex:1;background:#fdfdfc"><img src="assets/ex-0043.jpg" alt="" style="width:100%;aspect-ratio:1;object-fit:cover;display:block"></div>
+          <div style="flex:1;background:#fdfdfc"><img src="assets/ex-0100.jpg" alt="" style="width:100%;aspect-ratio:1;object-fit:cover;display:block"></div>
+          <div style="flex:1;background:#fdfdfc"><img src="assets/ex-0150.jpg" alt="" style="width:100%;aspect-ratio:1;object-fit:cover;display:block"></div>
+          <div style="flex:1;background:#fdfdfc"><img src="assets/ex-0025.jpg" alt="" style="width:100%;aspect-ratio:1;object-fit:cover;display:block"></div>
+        </div>
+
+        <div style="padding:13px 16px 8px">
+          <span style="font-weight:800;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#a5a09e">What it does</span>
+        </div>
+        <sc-for list="{{ features }}" as="f" hint-placeholder-count="3">
+          <div style="display:grid;grid-template-columns:26px 1fr;gap:11px;padding:11px 16px;border-top:1px solid #35312f">
+            <span style="font-weight:800;font-size:12px;color:#ff563c;font-variant-numeric:tabular-nums">{{ f.n }}</span>
+            <div>
+              <div style="font-weight:800;font-size:12.5px;letter-spacing:.03em;text-transform:uppercase">{{ f.title }}</div>
+              <p style="margin:3px 0 0;font-size:12px;line-height:1.55;color:#a5a09e">{{ f.body }}</p>
+            </div>
+          </div>
+        </sc-for>
+
+        <div style="background:#ff563c;color:#1a0f0c;padding:24px 16px 26px;margin-top:20px">
+          <div style="font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;opacity:.8">No plan, no coach, no subscription</div>
+          <div style="font-weight:800;font-size:34px;line-height:1.02;letter-spacing:-.035em;margin:8px 0 16px;text-transform:uppercase">Just the log,<br>and the load.</div>
+          <button style="display:flex;align-items:center;justify-content:space-between;width:100%;height:50px;padding:0 14px;border:1px solid #1a0f0c;color:#1a0f0c;font-weight:800;font-size:11px;letter-spacing:.16em;text-transform:uppercase" onClick="{{ toSignup }}">
+            <span>Start forging</span><span style="font-size:15px">→</span>
+          </button>
+        </div>
+        <div style="padding:13px 16px 18px;display:flex;justify-content:space-between;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:#a5a09e">
+          <span>Privacy &amp; media terms</span><span>MIT · 2026</span>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isAuth }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="padding:20px 16px 18px;border-bottom:2px solid #4a4645">
+          <div style="font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:#ff563c">{{ authKicker }}</div>
+          <h1 style="font-weight:800;font-size:38px;line-height:1;letter-spacing:-.035em;margin:8px 0 0;text-transform:uppercase">{{ authTitle }}</h1>
+          <p style="margin:9px 0 0;font-size:12.5px;line-height:1.55;color:#a5a09e;max-width:34ch">{{ authSub }}</p>
+        </div>
+
+        <sc-if value="{{ isSignup }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:13px 16px 0">
+            <label style="display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#a5a09e;margin-bottom:6px">Display name</label>
+            <input placeholder="Athlete" style="width:100%;height:46px;background:#232120;border:1px solid #4a4645;padding:0 12px;font:400 15px Archivo,system-ui,sans-serif;color:#f3f2f2;outline:none">
+          </div>
+        </sc-if>
+
+        <div style="padding:13px 16px 0">
+          <label style="display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#a5a09e;margin-bottom:6px">Email</label>
+          <input value="{{ email }}" onChange="{{ onEmail }}" placeholder="you@example.com" style="width:100%;height:46px;background:#232120;border:1px solid #4a4645;padding:0 12px;font:400 15px Archivo,system-ui,sans-serif;color:#f3f2f2;outline:none">
+        </div>
+        <div style="padding:13px 16px 0">
+          <label style="display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#a5a09e;margin-bottom:6px">Password</label>
+          <input type="password" value="{{ pass }}" onChange="{{ onPass }}" placeholder="At least 8 characters" style="width:100%;height:46px;background:#232120;border:1px solid {{ passBorder }};padding:0 12px;font:400 15px Archivo,system-ui,sans-serif;color:#f3f2f2;outline:none">
+          <div style="font-size:10.5px;letter-spacing:.04em;color:{{ hintColor }};margin-top:6px">{{ passHint }}</div>
+        </div>
+
+        <div style="padding:16px 16px 0">
+          <button style="display:flex;align-items:center;justify-content:space-between;width:100%;height:52px;padding:0 14px;background:{{ submitBg }};color:{{ submitColor }};font-weight:800;font-size:11px;letter-spacing:.16em;text-transform:uppercase" onClick="{{ submit }}">
+            <span>{{ submitLabel }}</span><span style="font-size:15px">→</span>
+          </button>
+          <sc-if value="{{ isSignin }}" hint-placeholder-val="{{ true }}">
+            <button style="display:block;width:100%;padding:14px 0 0;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#a5a09e" onClick="{{ toReset }}" style-hover="color:#f3f2f2">Forgot password?</button>
+          </sc-if>
+          <div style="height:2px;background:#4a4645;margin:18px 0"></div>
+          <button style="display:flex;align-items:center;justify-content:space-between;width:100%;height:46px;padding:0 14px;border:1px solid #4a4645;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase" onClick="{{ swap }}">
+            <span>{{ swapLabel }}</span><span style="font-size:14px">→</span>
+          </button>
+        </div>
+
+        <sc-if value="{{ done }}" hint-placeholder-val="{{ false }}">
+          <div style="margin:18px 16px 0;border:2px solid #f3f2f2">
+            <div style="background:#f3f2f2;color:#171615;padding:10px 14px;font-weight:800;font-size:10px;letter-spacing:.16em;text-transform:uppercase">Signed in</div>
+            <p style="margin:0;padding:12px 14px;font-size:12.5px;line-height:1.6">Token stored, biometrics loaded. Push A is queued for today — the app opens on Today.</p>
+          </div>
+        </sc-if>
+
+        <div style="padding:20px 16px 22px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#a5a09e;line-height:1.7">
+          Data stays on your instance · Exercise media © Gym visual
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════ RESET · REQUEST ══════════ -->
+    <sc-if value="{{ isReset }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="padding:20px 16px 18px;border-bottom:2px solid #4a4645">
+          <div style="font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:#ff563c">Locked out</div>
+          <h1 style="font-weight:800;font-size:38px;line-height:1;letter-spacing:-.035em;margin:8px 0 0;text-transform:uppercase">Reset it</h1>
+          <p style="margin:9px 0 0;font-size:12.5px;line-height:1.55;color:#a5a09e;max-width:34ch">Give us the address on the account. We send a single-use link that expires in thirty minutes.</p>
+        </div>
+
+        <div style="padding:14px 16px 0">
+          <label style="display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#a5a09e;margin-bottom:6px">Email</label>
+          <input value="{{ email }}" onChange="{{ onEmail }}" placeholder="you@example.com" style="width:100%;height:46px;background:#232120;border:1px solid #4a4645;padding:0 12px;font:400 15px Archivo,system-ui,sans-serif;color:#f3f2f2;outline:none">
+        </div>
+
+        <div style="padding:16px 16px 0">
+          <button style="display:flex;align-items:center;justify-content:space-between;width:100%;height:52px;padding:0 14px;background:{{ resetBg }};color:{{ resetColor }};font-weight:800;font-size:11px;letter-spacing:.16em;text-transform:uppercase" onClick="{{ sendReset }}">
+            <span>Send reset link</span><span style="font-size:15px">→</span>
+          </button>
+          <div style="height:2px;background:#4a4645;margin:18px 0"></div>
+          <button style="display:flex;align-items:center;justify-content:space-between;width:100%;height:46px;padding:0 14px;border:1px solid #4a4645;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase" onClick="{{ toSignin }}">
+            <span>Back to sign in</span><span style="font-size:14px">→</span>
+          </button>
+        </div>
+
+        <div style="margin:20px 16px 22px;border-left:2px solid #4a4645;padding:2px 0 2px 11px">
+          <p style="margin:0;font-size:11px;line-height:1.6;color:#a5a09e">For your safety the next screen reads the same whether or not that address has an account, and the link only ever arrives by mail — never on screen.</p>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════ RESET · SENT ══════════ -->
+    <sc-if value="{{ isSent }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="padding:20px 16px 18px;border-bottom:2px solid #4a4645">
+          <div style="font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:#ff563c">Check your mail</div>
+          <h1 style="font-weight:800;font-size:34px;line-height:1.04;letter-spacing:-.03em;margin:8px 0 0;text-transform:uppercase">On its way</h1>
+          <p style="margin:9px 0 0;font-size:12.5px;line-height:1.55;color:#a5a09e;max-width:36ch">If <span style="color:#f3f2f2">{{ emailShown }}</span> has an account, a reset link is in that inbox now. Nothing else changes until you follow it.</p>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:2px solid #4a4645">
+          <div style="padding:12px 16px;border-right:1px solid #35312f">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#a5a09e">Link expires</div>
+            <div style="font-weight:800;font-size:22px;letter-spacing:-.02em;font-variant-numeric:tabular-nums">30 min</div>
+          </div>
+          <div style="padding:12px 16px">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#a5a09e">Resend in</div>
+            <div style="font-weight:800;font-size:22px;letter-spacing:-.02em;font-variant-numeric:tabular-nums">{{ resendIn }}</div>
+          </div>
+        </div>
+
+        <div style="padding:16px 16px 0">
+          <button style="display:flex;align-items:center;justify-content:space-between;width:100%;height:46px;padding:0 14px;border:1px solid {{ resendBorder }};color:{{ resendColor }};font-size:10.5px;letter-spacing:.14em;text-transform:uppercase" onClick="{{ resend }}">
+            <span>{{ resendLabel }}</span><span style="font-size:14px">↻</span>
+          </button>
+          <button style="display:flex;align-items:center;justify-content:space-between;width:100%;height:46px;padding:0 14px;margin-top:8px;border:1px solid #4a4645;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase" onClick="{{ toSignin }}">
+            <span>Back to sign in</span><span style="font-size:14px">→</span>
+          </button>
+        </div>
+
+        <div style="margin:20px 16px 22px;border:1px dashed #4a4645;padding:12px 14px">
+          <div style="font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:#a5a09e;margin-bottom:6px">Prototype only</div>
+          <button style="display:flex;align-items:center;justify-content:space-between;width:100%;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#ff563c;text-align:left" onClick="{{ openLink }}">
+            <span>Follow the emailed link</span><span style="font-size:14px">→</span>
+          </button>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════ RESET · NEW PASSWORD ══════════ -->
+    <sc-if value="{{ isNewPass }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="padding:20px 16px 18px;border-bottom:2px solid #4a4645">
+          <div style="font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:#ff563c">Link verified</div>
+          <h1 style="font-weight:800;font-size:36px;line-height:1.02;letter-spacing:-.035em;margin:8px 0 0;text-transform:uppercase">New password</h1>
+          <p style="margin:9px 0 0;font-size:12.5px;line-height:1.55;color:#a5a09e;max-width:36ch">Setting this signs out every other device, and the link you just used stops working.</p>
+        </div>
+
+        <div style="padding:14px 16px 0">
+          <label style="display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#a5a09e;margin-bottom:6px">New password</label>
+          <input type="password" value="{{ pass }}" onChange="{{ onPass }}" placeholder="At least 8 characters" style="width:100%;height:46px;background:#232120;border:1px solid {{ passBorder }};padding:0 12px;font:400 15px Archivo,system-ui,sans-serif;color:#f3f2f2;outline:none">
+        </div>
+        <div style="padding:13px 16px 0">
+          <label style="display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#a5a09e;margin-bottom:6px">Repeat it</label>
+          <input type="password" value="{{ pass2 }}" onChange="{{ onPass2 }}" placeholder="Same again" style="width:100%;height:46px;background:#232120;border:1px solid {{ pass2Border }};padding:0 12px;font:400 15px Archivo,system-ui,sans-serif;color:#f3f2f2;outline:none">
+          <div style="font-size:10.5px;letter-spacing:.04em;color:{{ pass2Color }};margin-top:6px">{{ pass2Hint }}</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:5px;padding:15px 16px 0">
+          <sc-for list="{{ rules }}" as="r" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="width:14px;flex:none;font-weight:800;font-size:11px;color:{{ r.color }}">{{ r.mark }}</span>
+              <span style="font-size:11.5px;color:{{ r.color }}">{{ r.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="padding:16px 16px 0">
+          <button style="display:flex;align-items:center;justify-content:space-between;width:100%;height:52px;padding:0 14px;background:{{ saveBg }};color:{{ saveColor }};font-weight:800;font-size:11px;letter-spacing:.16em;text-transform:uppercase" onClick="{{ savePass }}">
+            <span>Set password &amp; sign in</span><span style="font-size:15px">✓</span>
+          </button>
+        </div>
+
+        <sc-if value="{{ resetDone }}" hint-placeholder-val="{{ false }}">
+          <div style="margin:18px 16px 0;border:2px solid #f3f2f2">
+            <div style="background:#f3f2f2;color:#171615;padding:10px 14px;font-weight:800;font-size:10px;letter-spacing:.16em;text-transform:uppercase">Password changed</div>
+            <p style="margin:0;padding:12px 14px;font-size:12.5px;line-height:1.6">Four other sessions were signed out. The app opens on Today.</p>
+          </div>
+        </sc-if>
+        <div style="height:22px"></div>
+      </div>
+    </sc-if>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:412,&quot;height&quot;:812}}">
+class Component extends DCLogic {
+  state = { view: 'landing', email: '', pass: '', pass2: '', done: false, resetDone: false, resends: 0 };
+
+  renderVals() {
+    const st = this.state;
+    const signup = st.view === 'signup';
+    const auth = st.view === 'signup' || st.view === 'signin';
+    const weak = st.pass.length > 0 && st.pass.length < 8;
+    const ready = st.email.includes('@') && st.pass.length >= 8;
+    const passOk = st.pass.length >= 8 && st.pass === st.pass2;
+
+    return {
+      isLanding: st.view === 'landing',
+      isAuth: auth,
+      isSignup: signup,
+      isSignin: st.view === 'signin',
+      navLabel: st.view === 'landing' ? 'Sign in' : 'Back',
+      toggle: () => this.setState({
+        view: st.view === 'landing' ? 'signin' : (auth ? 'landing' : 'signin'),
+        done: false, resetDone: false,
+      }),
+      toSignup: () => this.setState({ view: 'signup', done: false }),
+      swap: () => this.setState({ view: signup ? 'signin' : 'signup', done: false }),
+      swapLabel: signup ? 'I already have an account' : 'Create an account instead',
+
+      authKicker: signup ? 'New lifter' : 'Welcome back',
+      authTitle: signup ? 'Join the forge' : 'Sign in',
+      authSub: signup
+        ? 'One account, your own instance. Biometrics can wait — you can log a session in the next minute.'
+        : 'Pick up where the last session left off. Your routines and records are already there.',
+
+      email: st.email,
+      pass: st.pass,
+      onEmail: e => this.setState({ email: e.target.value, done: false }),
+      onPass: e => this.setState({ pass: e.target.value, done: false }),
+      passBorder: weak ? '#ff563c' : '#4a4645',
+      passHint: weak ? 'Eight characters minimum' : (signup ? 'Eight characters minimum' : 'Case sensitive'),
+      hintColor: weak ? '#ffb3a3' : '#a5a09e',
+      submitLabel: signup ? 'Create account' : 'Sign in',
+      submitBg: ready ? '#ff563c' : '#232120',
+      submitColor: ready ? '#1a0f0c' : '#a5a09e',
+      submit: () => { if (ready) this.setState({ done: true }); },
+      done: st.done,
+
+      /* ── password reset ── */
+      isReset: st.view === 'reset',
+      isSent: st.view === 'sent',
+      isNewPass: st.view === 'newpass',
+      toReset: () => this.setState({ view: 'reset', pass: '', done: false }),
+      toSignin: () => this.setState({ view: 'signin', done: false, resetDone: false }),
+
+      resetBg: st.email.includes('@') ? '#ff563c' : '#232120',
+      resetColor: st.email.includes('@') ? '#1a0f0c' : '#a5a09e',
+      /* Same response either way — never confirms whether the address exists. */
+      sendReset: () => { if (st.email.includes('@')) this.setState({ view: 'sent', resends: 0 }); },
+
+      emailShown: st.email || 'that address',
+      resendIn: st.resends >= 2 ? 'Held' : (st.resends === 1 ? '4:00' : '2:00'),
+      resendLabel: st.resends >= 2 ? 'Too many attempts' : 'Resend the link',
+      resendBorder: st.resends >= 2 ? '#35312f' : '#4a4645',
+      resendColor: st.resends >= 2 ? '#6f6a68' : '#f3f2f2',
+      resend: () => { if (st.resends < 2) this.setState(s => ({ resends: s.resends + 1 })); },
+      openLink: () => this.setState({ view: 'newpass', pass: '', pass2: '', resetDone: false }),
+
+      pass2: st.pass2,
+      onPass2: e => this.setState({ pass2: e.target.value, resetDone: false }),
+      pass2Border: st.pass2 && st.pass2 !== st.pass ? '#ff563c' : '#4a4645',
+      pass2Hint: st.pass2 && st.pass2 !== st.pass ? 'These do not match' : 'Both fields must match',
+      pass2Color: st.pass2 && st.pass2 !== st.pass ? '#ffb3a3' : '#a5a09e',
+      rules: [
+        { label: 'Eight characters or more', ok: st.pass.length >= 8 },
+        { label: 'Not your previous password', ok: st.pass.length >= 8 && st.pass !== 'forgefit' },
+        { label: 'Full length is kept — nothing is trimmed', ok: st.pass.length >= 8 },
+      ].map(r => ({ label: r.label, mark: r.ok ? '✓' : '·', color: r.ok ? '#ff563c' : '#6f6a68' })),
+      saveBg: passOk ? '#ff563c' : '#232120',
+      saveColor: passOk ? '#1a0f0c' : '#a5a09e',
+      savePass: () => { if (passOk) this.setState({ resetDone: true }); },
+      resetDone: st.resetDone,
+
+      features: [
+        { n: 1, title: 'One-tap set logging', body: 'Every row shows last session. Hit the check and it commits — or open the numpad with plate steppers.' },
+        { n: 2, title: 'Plain-English log', body: '“bench 3x8 at 60kg then ran 20 minutes” becomes sets, cardio and calories you confirm before saving.' },
+        { n: 3, title: 'Form on the spot', body: '1,324 technical illustrations with cues, searchable by body part and equipment, mid-set.' },
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>
