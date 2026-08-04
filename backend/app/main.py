@@ -21,6 +21,36 @@ settings = get_settings()
 configure_logging(settings.environment)
 
 
+def _assert_schema_is_current() -> None:
+    """PR4 — refuse to serve against a schema Alembic has not brought up to
+    head. In development this is a loud warning with the command to run; in
+    production it is fatal, because serving on a half-migrated database is how
+    you get silent data loss rather than an error page."""
+    from alembic.config import Config as AlembicConfig
+    from alembic.script import ScriptDirectory
+    from alembic.runtime.migration import MigrationContext
+    from .db import engine
+
+    backend_dir = Path(__file__).resolve().parent.parent
+    cfg = AlembicConfig(str(backend_dir / "alembic.ini"))
+    cfg.set_main_option("script_location", str(backend_dir / "alembic"))
+    head = ScriptDirectory.from_config(cfg).get_current_head()
+
+    with engine.connect() as conn:
+        current = MigrationContext.configure(conn).get_current_revision()
+
+    if current == head:
+        return
+
+    message = (
+        f"Database schema is at {current or 'nothing'}, expected {head}. "
+        "Run: alembic upgrade head"
+    )
+    if settings.is_production:
+        raise RuntimeError(message)
+    logger.warning('"schema_out_of_date":"%s"', message)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if settings.sentry_dsn:
@@ -32,9 +62,14 @@ async def lifespan(app: FastAPI):
         )
         logger.info('"sentry":"enabled"')
 
-    from .db import Base, engine
-
-    Base.metadata.create_all(bind=engine)
+    # PR4 — schema is Alembic's job alone.
+    #
+    # Base.metadata.create_all() used to run here. It creates missing tables
+    # but never alters existing ones, so it makes migrations look unnecessary
+    # right up until the first ALTER, at which point each environment quietly
+    # holds a different schema. `alembic upgrade head` is now a deploy step
+    # (see deploy/ and the README); this only checks it was actually run.
+    _assert_schema_is_current()
 
     db = SessionLocal()
     try:
@@ -60,10 +95,25 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+# PR11 — when nginx terminates the connection, every request otherwise arrives
+# from the proxy's address and slowapi buckets all users together, which makes
+# the 10/minute auth limit meaningless. Only trusted when BEHIND_PROXY is set:
+# honouring X-Forwarded-For unconditionally would let any client forge its own
+# source address and walk past the same limit.
+if settings.behind_proxy:
+    from starlette.middleware.trustedhost import TrustedHostMiddleware  # noqa: F401
+    from .proxy import ProxyHeadersMiddleware
+
+    app.add_middleware(ProxyHeadersMiddleware, hops=settings.trusted_proxy_hops)
+
+# PR3 — allow_origin_regex is development-only. settings.effective_… returns
+# None in production so the LAN pattern cannot combine with allow_credentials
+# to make every host on a private-range address a trusted, credentialed origin.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_origin_regex=settings.cors_origin_regex or None,
+    allow_origin_regex=settings.effective_cors_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
