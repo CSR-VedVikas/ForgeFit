@@ -49,9 +49,21 @@ ForgeFit - Track B Wiring.dc.html
 assets/ex-*.jpg
 ```
 
-Download the project export from Claude Design and unzip it over this
-directory — paths match, nothing here will conflict. `scraps/` and `uploads/`
-from that export are working residue and are gitignored on purpose.
+Download the project export from Claude Design, then:
+
+```bash
+python design/unpack-export.py ~/Downloads/ForgeFit-export.zip
+```
+
+That extracts it here and verifies every prototype's referenced files resolve,
+exiting non-zero if anything is still missing — so it is safe to chain with a
+commit. Run it with no argument to check the current state without extracting.
+
+`scraps/` and `uploads/` from that export are working residue (PDF page
+rasters, pasted screenshots) and are gitignored on purpose.
+
+Until the export is unpacked, `ForgeFitEntry-Ink.dc.html` renders with four
+broken images — it references `assets/ex-*.jpg`, which are not committed.
 
 ## Media attribution
 

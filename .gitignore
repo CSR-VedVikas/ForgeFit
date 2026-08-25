@@ -29,3 +29,6 @@ deploy/certbot/
 design/scraps/
 design/uploads/
 design/*.zip
+
+# Database dumps from deploy/backup.sh — never commit these.
+backups/
