@@ -8,7 +8,7 @@ written for an engineer or agent picking the project up cold.
 You are completing ForgeFit, a multi-user fitness PWA: FastAPI + SQLAlchemy +
 Alembic backend, React/Vite frontend, PostgreSQL in production. Repo:
 https://github.com/CSR-VedVikas/ForgeFit — work on branch `redesign`, which is
-5 commits ahead of `main`. Read `README.md`, `design/README.md`,
+7 commits ahead of `main`. Read `README.md`, `design/README.md`,
 `design/github.md`, and open `design/ForgeFit - Production Readiness.dc.html`
 in a browser before touching anything.
 
@@ -26,11 +26,13 @@ the readiness doc:
   genuinely revokes. Table `refresh_tokens`, migration `0002`.
 - `Base.metadata.create_all()` is gone. `alembic upgrade head` is mandatory
   and the app refuses to serve if the schema is not at head. `0001_initial`
-  builds the real baseline from `Base.metadata`.
+  is a hand-written frozen baseline; head is `0003`.
 - Compose runs Postgres 16 + a one-shot migrate service + API + nginx with
   TLS. Secrets come from gitignored `deploy/production.env`; bring it up with
   `docker compose --env-file deploy/production.env up -d --build`.
-- 27 backend tests pass. Run them from `backend/`, not the repo root.
+- 46 backend tests pass. Run them from `backend/`, not the repo root.
+  `tests/conftest.py` resets the rate limiter per test — without it any
+  file with more than ten registrations starts seeing 429s.
 
 **PWA is installable** (commit `f2ec4de`): raster icons, apple-touch-icon,
 `apple-mobile-web-app-capable`, and a network-first service worker for
@@ -77,9 +79,10 @@ Open the PR at https://github.com/CSR-VedVikas/ForgeFit/pull/new/redesign.
 `main` still shows the pre-redesign README to every visitor. Merge with
 `--no-ff` so the branch stays readable as history.
 
-### 2. Schema migration `0003` — the N/R/W gaps
-One migration, before any screen is wired, because every gap below blocks a
-screen. From `design/github.md`:
+### 2. ~~Schema migration `0003`~~ — DONE 21 Sep 2026
+Landed as `backend/alembic/versions/0003_schema_gaps.py` with 19 tests in
+`tests/test_schema_gaps.py`. `design/frontend-api/endpoints.js` carries the
+new routes. Kept here for the record; nothing left to do:
 
 | Gap | Fix |
 | --- | --- |
@@ -91,8 +94,10 @@ screen. From `design/github.md`:
 | R1 | `routine_exercises` gains `target_weight_kg` and `target_reps` so the builder's prescription can persist. |
 | W1 | `WorkoutCreate` gains optional `client_id` (unique per user). `POST /api/workouts` returns the existing row on a duplicate instead of inserting. `session-queue.js` already sends it. |
 
-Write it by hand (`alembic revision -m`), not `--autogenerate` — autogenerate
-against SQLite drops constraints it cannot express. Add a test per gap.
+Note for the next migration: `0001_initial` is now hand-written, frozen text.
+It was briefly built from `Base.metadata` at runtime, which drifted with the
+models and would have double-created the 0003 columns on a fresh install. A
+baseline must never reference a moving target.
 
 ### 3. Wire the redesign into `frontend/src` — days 5–17 in the readiness doc
 Order is read-only screens, then writes, then queue-backed screens, then Fuel.
@@ -171,7 +176,7 @@ with file names. Not a summary. It must cover:
 
 - `main` == `redesign`, merged via PR.
 - `design/unpack-export.py` exits 0.
-- Migration `0003` applied; a test exists per gap N1–N5, R1, W1.
+- ~~Migration `0003` applied; a test exists per gap N1–N5, R1, W1.~~ Done.
 - Every page in `frontend/src/pages/` is on the ink system and calls the API
   only through `frontend/src/api/`. `frontend/src/api.js` is deleted.
 - Icons and manifest are on the ink palette.

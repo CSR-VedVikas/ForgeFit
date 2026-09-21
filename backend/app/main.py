@@ -15,7 +15,7 @@ from .db import SessionLocal
 from .logging_config import configure_logging, SecurityHeadersMiddleware, logger
 from .rate_limit import limiter
 from .services.seed_exercises import seed_exercises
-from .routers import auth, profile, exercises, nlp, workouts, nutrition, stats, routines
+from .routers import auth, profile, exercises, nlp, workouts, nutrition, stats, routines, courses
 
 settings = get_settings()
 configure_logging(settings.environment)
@@ -127,6 +127,7 @@ app.include_router(workouts.router)
 app.include_router(routines.router)
 app.include_router(nutrition.router)
 app.include_router(stats.router)
+app.include_router(courses.router)
 media_root = Path(settings.media_root)
 if not media_root.is_absolute():
     backend_dir = Path(__file__).resolve().parent.parent

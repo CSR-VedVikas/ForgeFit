@@ -7,8 +7,18 @@ from ..models import WorkoutSession, WorkoutSet, Profile, ExerciseCatalog
 from ..schemas import WorkoutCreate, WorkoutOut, SetOut, LastSessionSet
 from ..auth import CurrentUser
 from ..services.pr_engine import apply_prs_and_achievements
+from ..services import courses as course_svc
 
 router = APIRouter(prefix="/api/workouts", tags=["workouts"])
+
+
+def _load_full(db: Session, session_id: int) -> WorkoutSession:
+    return (
+        db.query(WorkoutSession)
+        .options(joinedload(WorkoutSession.sets).joinedload(WorkoutSet.exercise))
+        .filter(WorkoutSession.id == session_id)
+        .one()
+    )
 
 
 def _serialize_workout(session: WorkoutSession, achievements: list | None = None) -> WorkoutOut:
@@ -55,12 +65,26 @@ def create_workout(payload: WorkoutCreate, user: CurrentUser, db: Session = Depe
     if not payload.sets:
         raise HTTPException(400, "At least one set required")
 
+    # W1 — a retry after a lost response must not insert a twin. The queue
+    # sends the same client_id it wrote to IndexedDB before going online, so
+    # the second POST finds the first one's row. Returned without re-running
+    # the PR engine: those records were already awarded.
+    if payload.client_id:
+        existing = (
+            db.query(WorkoutSession)
+            .filter(WorkoutSession.user_id == user.id, WorkoutSession.client_id == payload.client_id)
+            .first()
+        )
+        if existing:
+            return _serialize_workout(_load_full(db, existing.id))
+
     for s in payload.sets:
         if not db.get(ExerciseCatalog, s.exercise_id):
             raise HTTPException(400, f"Unknown exercise_id: {s.exercise_id}")
 
     session = WorkoutSession(
         user_id=user.id,
+        client_id=payload.client_id,
         notes=payload.notes,
         source_query=payload.source_query,
         calories_burned=payload.calories_burned,
@@ -85,23 +109,13 @@ def create_workout(payload: WorkoutCreate, user: CurrentUser, db: Session = Depe
     db.refresh(session)
 
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
-    # reload sets
-    session = (
-        db.query(WorkoutSession)
-        .options(joinedload(WorkoutSession.sets).joinedload(WorkoutSet.exercise))
-        .filter(WorkoutSession.id == session.id)
-        .one()
-    )
+    session = _load_full(db, session.id)
     achievements = apply_prs_and_achievements(db, user.id, session, profile)
+    # N4 — a finished session is a course day. Same transaction as the
+    # workout, so a failed commit cannot leave the cursor one day ahead.
+    course_svc.advance(db, user.id)
     db.commit()
-    db.refresh(session)
-    session = (
-        db.query(WorkoutSession)
-        .options(joinedload(WorkoutSession.sets).joinedload(WorkoutSet.exercise))
-        .filter(WorkoutSession.id == session.id)
-        .one()
-    )
-    return _serialize_workout(session, achievements)
+    return _serialize_workout(_load_full(db, session.id), achievements)
 
 
 @router.get("", response_model=list[WorkoutOut])

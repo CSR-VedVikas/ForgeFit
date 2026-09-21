@@ -177,6 +177,9 @@ class WorkoutCreate(BaseModel):
     sets: list[SetCreate]
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
+    # W1 — set by session-queue.js before the network is involved. A retry
+    # after a lost response returns the row this created, not a duplicate.
+    client_id: Optional[str] = Field(default=None, max_length=64)
 
 
 class SetOut(BaseModel):
@@ -229,6 +232,9 @@ class FoodLogCreate(BaseModel):
     fat: float = 0
     meal_type: str = "snack"
     source_confidence: float = 1.0
+    # N1 — portion. nlp.parse already returns these on DraftFood.
+    quantity: Optional[float] = Field(default=None, ge=0)
+    unit: str = Field(default="", max_length=32)
 
 
 class FoodLogOut(BaseModel):
@@ -242,6 +248,32 @@ class FoodLogOut(BaseModel):
     fat: float
     meal_type: str
     source_confidence: float
+    quantity: Optional[float] = None
+    unit: str = ""
+
+    class Config:
+        from_attributes = True
+
+
+# ---- Water (N2) ----
+class WaterLogCreate(BaseModel):
+    ml: int = Field(gt=0, le=5000)
+
+
+class WaterLogOut(BaseModel):
+    id: int
+    ml: int
+    logged_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ---- Weigh-ins (N3) ----
+class WeighInOut(BaseModel):
+    id: int
+    weight_kg: float
+    recorded_at: datetime
 
     class Config:
         from_attributes = True
@@ -256,6 +288,9 @@ class DailyNutrition(BaseModel):
     calories_burned: float
     calorie_goal: int
     foods: list[FoodLogOut] = []
+    # N2 — 35 ml/kg from the current profile weight.
+    water_ml: int = 0
+    water_goal_ml: int = 0
 
 
 # ---- Stats ----
@@ -313,6 +348,9 @@ class DailyLinkOut(BaseModel):
 class RoutineExerciseIn(BaseModel):
     exercise_id: str
     default_sets: int = 3
+    # R1 — the builder's prescription. None means no target, not zero.
+    target_weight_kg: Optional[float] = Field(default=None, ge=0, le=1000)
+    target_reps: Optional[int] = Field(default=None, ge=1, le=100)
 
 
 class RoutineCreate(BaseModel):
@@ -335,6 +373,8 @@ class RoutineExerciseOut(BaseModel):
     gif_url: str = ""
     sort_order: int
     default_sets: int
+    target_weight_kg: Optional[float] = None
+    target_reps: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -362,3 +402,50 @@ class ActivityOut(BaseModel):
     week_hours: float
     workout_count: int
     days: list[ActivityDay]
+
+
+# ---- Courses (N4) ----
+class CourseOut(BaseModel):
+    id: int
+    slug: str
+    name: str
+    description: str
+    weeks: int
+    days_per_week: int
+    weekly_load_step_kg: float
+    session_names: list[str] = []
+
+    class Config:
+        from_attributes = True
+
+
+class EnrolRequest(BaseModel):
+    course_id: int
+
+
+class EnrolmentOut(BaseModel):
+    id: int
+    course: CourseOut
+    current_week: int
+    current_day: int
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    # Derived, for Today's kicker and the session name.
+    session_name: str = ""
+    sessions_done: int = 0
+    sessions_total: int = 0
+    is_complete: bool = False
+
+
+# ---- Barcode (N5) ----
+class BarcodeItem(BaseModel):
+    food_name: str
+    brand: str = ""
+    calories: float
+    protein: float = 0
+    carbs: float = 0
+    fat: float = 0
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    upc: str
+

@@ -64,6 +64,59 @@ async def _post_nutrition(path: str, body: dict) -> dict:
     raise NutritionAPIError("Nutrition API failed. " + " | ".join(errors[-2:]) + hint)
 
 
+async def _get_nutrition(path: str, params: dict) -> dict:
+    """GET across the same candidate bases. Mirrors _post_nutrition; the
+    provider's item lookup is a GET where the parsers are POSTs."""
+    settings = get_settings()
+    if not settings.nutrition_app_id or not settings.nutrition_app_key:
+        raise NutritionAPIError("Nutrition API credentials not configured")
+
+    headers = {
+        "x-app-id": settings.nutrition_app_id,
+        "x-app-key": settings.nutrition_app_key,
+        "x-remote-user-id": "0",
+        "Accept": "application/json",
+    }
+
+    errors: list[str] = []
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        for base in _candidate_bases(settings):
+            url = f"{base}/{path.lstrip('/')}"
+            try:
+                resp = await client.get(url, headers=headers, params=params)
+                if resp.status_code == 404:
+                    # The product is unknown, not the endpoint. Stop looking.
+                    return {}
+                if resp.status_code < 400:
+                    return resp.json()
+                errors.append(f"{url} → {resp.status_code}: {resp.text[:180]}")
+            except Exception as e:
+                errors.append(f"{url} → {e}")
+
+    raise NutritionAPIError("Nutrition API failed. " + " | ".join(errors[-2:]))
+
+
+async def product_by_barcode(upc: str) -> dict[str, Any] | None:
+    """N5 — packaged-product lookup. Returns a DraftFood-shaped dict, or None
+    when the provider does not know the code. Separate from
+    natural_nutrients(): that endpoint parses prose and cannot take a UPC."""
+    data = await _get_nutrition("search/item", {"upc": upc})
+    foods = data.get("foods") or []
+    if not foods:
+        return None
+    f = foods[0]
+    return {
+        "food_name": f.get("food_name") or "",
+        "brand": f.get("brand_name") or "",
+        "calories": float(f.get("nf_calories") or 0),
+        "protein": float(f.get("nf_protein") or 0),
+        "carbs": float(f.get("nf_total_carbohydrate") or 0),
+        "fat": float(f.get("nf_total_fat") or 0),
+        "quantity": f.get("serving_qty"),
+        "unit": f.get("serving_unit"),
+    }
+
+
 async def natural_nutrients(query: str) -> list[dict[str, Any]]:
     """Parse food text into nutrition items via Nutritionix-compatible API."""
     data = await _post_nutrition("natural/nutrients", {"query": query})

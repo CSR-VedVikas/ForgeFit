@@ -21,13 +21,19 @@ date: 2026-07-28 (track A complete; nutrition + courses added)
 - Fuel v2: portion editor (servings and grams over one value), per-meal calorie targets, water (35 ml/kg), recents/favourites/saved meals, repeat-yesterday, weigh-in trend with goal adherence, and a barcode flow with a pre-permission explainer.
 - Courses: training presets with a duration (weeks, days/week, weekly load step). Finishing a session advances the course; Today's kicker and the session name read from it.
 
-## Schema gaps blocking persistence
+## Schema gaps — closed by migration 0003 (21 Sep 2026)
 
-- `food_logs` has no quantity/unit column — `DraftFood.quantity` / `.unit` are parsed in `services/nlp_router.py` then dropped on save
-- No water log table
-- No weigh-in history table (`Profile.weight_kg` is a single current value)
-- No course/enrolment tables (`Routine` has no time dimension)
-- Barcode lookup needs Nutritionix's product endpoint, separate from `natural_nutrients()`
+| Gap | Was | Now |
+| --- | --- | --- |
+| N1 | `food_logs` had no quantity/unit; parsed then dropped on save | `food_logs.quantity`, `.unit`; `FoodLogCreate` carries both |
+| N2 | No water log table | `water_logs`; `POST /api/nutrition/water`; `daily` returns `water_ml` + `water_goal_ml` (35 ml/kg) |
+| N3 | `Profile.weight_kg` was a single current value | `weigh_ins`, backfilled from profiles; a changed `weight_kg` appends a row; `GET /api/profile/weigh-ins` |
+| N4 | `Routine` had no time dimension | `courses` (3 seeded presets) + `course_enrolments`; `/api/courses/*`; finishing a workout advances the cursor |
+| N5 | Barcode needed the provider's product endpoint | `nutrition_api.product_by_barcode()`; `GET /api/nutrition/barcode/{upc}` |
+| R1 | Builder prescription had nowhere to persist | `routine_exercises.target_weight_kg`, `.target_reps` (nullable — no target is not zero) |
+| W1 | `POST /api/workouts` had no idempotency key | `workout_sessions.client_id`, unique per user; a replay returns the original row |
+
+19 tests in `backend/tests/test_schema_gaps.py`, one or more per gap.
 
 ## Screen map
 
@@ -71,3 +77,4 @@ date: 2026-07-28 (track A complete; nutrition + courses added)
 ## Sync history
 
 - 2026-07-27 — recreated all 10 current screens, then the Modernist redesign through routine builder + settings.
+- 2026-09-21 — migration 0003 closed N1–N5, R1, W1. `frontend-api/endpoints.js` updated with the new routes. Wiring is unblocked on the schema side.

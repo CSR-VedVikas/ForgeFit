@@ -1,8 +1,12 @@
 /* ForgeFit — B1: every route the service actually exposes, one function each.
  *
  * frontend/src/api/endpoints.js. Paths verified against backend/app/routers/*.py
- * on 29 Jul 2026. If a screen wants something that is not in this file, the
- * endpoint does not exist — see the gaps table in the Track B wiring doc.
+ * on 21 Sep 2026. If a screen wants something that is not in this file, the
+ * endpoint does not exist.
+ *
+ * Migration 0003 closed every gap in the Track B table: N1 portions, N2 water,
+ * N3 weigh-ins, N4 courses, N5 barcode, R1 prescription, W1 idempotency. The
+ * comments that used to say "gap Nx" now say what the field does.
  */
 
 import { request, tokens } from './client.js';
@@ -57,8 +61,12 @@ export const profile = {
   get: () => request('/api/profile'),
   /* Partial: display_name, gender, weight_kg, height_cm, age,
    * daily_calorie_goal, rest_seconds. Units and plate step are NOT here —
-   * keep those in localStorage (see the doc). */
+   * keep those in localStorage (see the doc).
+   * A changed weight_kg also records a weigh-in (N3); an unchanged one does
+   * not, so re-saving the Settings form never fabricates a trend point. */
   update: patch => request('/api/profile', { method: 'PUT', body: patch }),
+  /* Newest first. Fuel's trend strip reverses it for drawing. */
+  weighIns: (limit = 90) => request(`/api/profile/weigh-ins${qs({ limit })}`),
 };
 
 /* ── exercises (routers/exercises.py) ──────────────────────── */
@@ -86,7 +94,10 @@ export const workouts = {
   /* One call per finished session — there is no per-set endpoint.
    * Response carries sets[].is_pr and sets[].pr_types (max_weight /
    * max_volume / max_reps) plus new_achievements: that is what the record
-   * slab renders. Route writes through queue.js, never directly. */
+   * slab renders. Route writes through queue.js, never directly.
+   * Send client_id (W1): a retry after a lost response returns the row the
+   * first attempt created, with new_achievements empty so the slab does not
+   * fire twice. Finishing a session also advances the active course (N4). */
   create: session => request('/api/workouts', { method: 'POST', body: session, retry: false }),
   list: (limit = 30) => request(`/api/workouts${qs({ limit })}`),
   get: id => request(`/api/workouts/${id}`),
@@ -98,8 +109,9 @@ export const workouts = {
 
 export const routines = {
   list: () => request('/api/routines'),
-  /* exercises: [{exercise_id, default_sets}] only. No target load or reps —
-   * the builder's prescription has nowhere to persist yet (gap R1). */
+  /* exercises: [{exercise_id, default_sets, target_weight_kg?, target_reps?}].
+   * Targets are the builder's prescription (R1); null means no target, which
+   * the session sheet renders as an empty prefill, not 0. */
   create: (name, exercises = []) => request('/api/routines', { method: 'POST', body: { name, exercises } }),
   update: (id, patch) => request(`/api/routines/${id}`, { method: 'PUT', body: patch }),
   remove: id => request(`/api/routines/${id}`, { method: 'DELETE' }),
@@ -108,11 +120,35 @@ export const routines = {
 /* ── nutrition (routers/nutrition.py) ──────────────────────── */
 
 export const nutrition = {
-  /* FoodLogCreate has no quantity/unit — portions cannot round-trip yet
-   * (gap N1), even though nlp.parse returns them on DraftFood. */
+  /* entry carries quantity + unit (N1) straight through from DraftFood or the
+   * portion editor. Both optional; pre-N1 entries come back with null / "". */
   log: entry => request('/api/nutrition/log', { method: 'POST', body: entry, retry: false }),
   logBatch: entries => request('/api/nutrition/log/batch', { method: 'POST', body: entries, retry: false }),
+  /* daily now also carries water_ml and water_goal_ml (35 ml/kg). */
   daily: day => request(`/api/nutrition/daily${qs({ date: day })}`),
+
+  /* N2 — the water tile appends its increment; it does not send a total. */
+  logWater: ml => request('/api/nutrition/water', { method: 'POST', body: { ml }, retry: false }),
+  water: day => request(`/api/nutrition/water${qs({ date: day })}`),
+
+  /* N5 — packaged product by UPC/EAN. Returns a DraftFood shape plus brand
+   * and upc, so the portion editor treats it exactly like a parsed entry.
+   * 404 = provider does not know the code; 502 = provider is down. Run the
+   * camera pre-permission explainer BEFORE calling this. */
+  barcode: upc => request(`/api/nutrition/barcode/${encodeURIComponent(upc)}`),
+};
+
+/* ── courses (routers/courses.py — N4) ─────────────────────── */
+
+export const courses = {
+  list: () => request('/api/courses'),
+  /* null when not enrolled — Today then falls back to the routine picker.
+   * Otherwise session_name is the kicker and current_week/current_day the
+   * cursor; sessions_done/sessions_total drive the progress strip. */
+  current: () => request('/api/courses/current'),
+  /* Enrolling while another course is active abandons it. */
+  enrol: course_id => request('/api/courses/enrol', { method: 'POST', body: { course_id } }),
+  abandon: () => request('/api/courses/current', { method: 'DELETE' }),
 };
 
 /* ── stats (routers/stats.py) ──────────────────────────────── */
