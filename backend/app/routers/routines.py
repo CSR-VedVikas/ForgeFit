@@ -28,6 +28,8 @@ def _serialize(routine: Routine) -> RoutineOut:
                 gif_url=ex.gif_url if ex else "",
                 sort_order=re.sort_order,
                 default_sets=re.default_sets,
+                target_weight_kg=re.target_weight_kg,
+                target_reps=re.target_reps,
             )
         )
     return RoutineOut(
@@ -62,6 +64,10 @@ def _replace_exercises(db: Session, routine: Routine, exercises: list) -> None:
                 exercise_id=item.exercise_id,
                 sort_order=i,
                 default_sets=max(1, min(item.default_sets, 12)),
+                # R1 — the builder's prescription. Validated at the schema;
+                # None passes through as "no target".
+                target_weight_kg=item.target_weight_kg,
+                target_reps=item.target_reps,
             )
         )
 
