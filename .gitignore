@@ -23,3 +23,6 @@ deploy/certs/
 deploy/certbot/
 *.pem
 *.key
+
+# Database dumps from deploy/backup.sh — never commit these.
+backups/
