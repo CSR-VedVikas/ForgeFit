@@ -1,7 +1,18 @@
 import json
+import logging
 from typing import Any
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, OpenAIError
 from ..config import get_settings
+
+logger = logging.getLogger("forgefit")
+
+# Smart Log must keep working when OpenAI does not: an empty balance (a 429
+# insufficient_quota), a revoked key, an outage, or a reply that is not the
+# JSON we asked for. The regex parsers below were only used when no key was
+# configured, so a configured-but-failing key turned every strength entry into
+# "Strength parse failed". Any of these now degrades to the regex parser.
+_FALLBACK_ERRORS = (OpenAIError, json.JSONDecodeError, TimeoutError)
+_TIMEOUT_S = 15.0
 
 CLASSIFY_SYSTEM = """You classify fitness journal text into intents.
 Return JSON only with keys:
@@ -34,7 +45,7 @@ def _client() -> AsyncOpenAI | None:
     settings = get_settings()
     if not settings.openai_api_key or settings.openai_api_key.startswith("sk-your"):
         return None
-    return AsyncOpenAI(api_key=settings.openai_api_key)
+    return AsyncOpenAI(api_key=settings.openai_api_key, timeout=_TIMEOUT_S, max_retries=1)
 
 
 async def classify_intent(text: str) -> dict[str, Any]:
@@ -42,16 +53,20 @@ async def classify_intent(text: str) -> dict[str, Any]:
     if not client:
         return _heuristic_classify(text)
 
-    resp = await client.chat.completions.create(
-        model="gpt-4o-mini",
-        temperature=0,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": CLASSIFY_SYSTEM},
-            {"role": "user", "content": text},
-        ],
-    )
-    return json.loads(resp.choices[0].message.content or "{}")
+    try:
+        resp = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": CLASSIFY_SYSTEM},
+                {"role": "user", "content": text},
+            ],
+        )
+        return json.loads(resp.choices[0].message.content or "{}")
+    except _FALLBACK_ERRORS as e:
+        logger.warning('"openai_fallback":"classify_intent","error":"%s"', type(e).__name__)
+        return _heuristic_classify(text)
 
 
 async def parse_strength_sets(text: str) -> dict[str, Any]:
@@ -59,16 +74,20 @@ async def parse_strength_sets(text: str) -> dict[str, Any]:
     if not client:
         return _heuristic_strength(text)
 
-    resp = await client.chat.completions.create(
-        model="gpt-4o-mini",
-        temperature=0,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": STRENGTH_SYSTEM},
-            {"role": "user", "content": text},
-        ],
-    )
-    return json.loads(resp.choices[0].message.content or "{}")
+    try:
+        resp = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": STRENGTH_SYSTEM},
+                {"role": "user", "content": text},
+            ],
+        )
+        return json.loads(resp.choices[0].message.content or "{}")
+    except _FALLBACK_ERRORS as e:
+        logger.warning('"openai_fallback":"parse_strength_sets","error":"%s"', type(e).__name__)
+        return _heuristic_strength(text)
 
 
 def _heuristic_classify(text: str) -> dict[str, Any]:

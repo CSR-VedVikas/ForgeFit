@@ -29,7 +29,7 @@ anything, and run `git log --oneline main..HEAD` to see what is unmerged.
 - Compose runs Postgres 16 + a one-shot migrate service + API + nginx with
   TLS. Secrets come from gitignored `deploy/production.env`; bring it up with
   `docker compose --env-file deploy/production.env up -d --build`.
-- 46 backend tests pass. Run them from `backend/`, not the repo root.
+- 61 backend tests pass. Run them from `backend/`, not the repo root.
   `tests/conftest.py` resets the rate limiter per test — without it any file
   with more than ten registrations starts seeing 429s.
 
@@ -57,24 +57,15 @@ navigations. `frontend/scripts/make-icons.py` regenerates icons.
 
 ## What remains, in order
 
-### 1. Frontend plumbing — blocks deploy
-`frontend/src/api.js` predates the token model. Replace it with a
-`frontend/src/api/` layer where every call goes through one `request()`:
-
-- **Refresh handling — launch blocker.** On a 401, call
-  `POST /api/auth/refresh` once with `credentials: 'include'`, retry, and only
-  then sign out. Collapse concurrent refreshes into one promise: the server
-  rotates on every call and treats a replayed token as theft. Without this,
-  production users are signed out every 15 minutes.
-- **Readable errors.** FastAPI 422 `detail` is an array; the sign-up screen
-  currently prints it raw. One `ApiError` with a `userMessage`.
-- **Logout** calls `POST /api/auth/logout` before clearing local state.
-- **Optional:** an IndexedDB session queue so a set logged without signal is
-  not lost; send `client_id` on `POST /api/workouts` (the server dedupes on it).
-
-Backend, same pass: `services/openai_nlp.py` only falls back to the regex
-parser when no key is set. Make it fall back on any OpenAI error too, so an
-outage or empty balance never breaks Smart Log.
+### 1. ~~Frontend plumbing~~ — DONE 3 Oct 2026
+`frontend/src/api/` replaced `api.js` with the same exports, so no screen
+changed: single-flight refresh on 401, readable `ApiError` messages, logout
+that revokes server-side, and `X-Timezone` on every request. The backend
+computes every "today / this week / which day" through `app/clock.py`, so a
+meal logged after local midnight no longer lands on yesterday. Smart Log
+falls back to the regex parser on any OpenAI failure. Not done, optional: an
+IndexedDB queue for sets logged without signal (the server already dedupes
+on `client_id`).
 
 ### 2. Food data sources
 - **Exercise calories** stay on the 100 Days of Python API, which moved to
@@ -119,8 +110,7 @@ Pending; the owner holds its brief.
 
 ## Definition of done
 
-- `frontend/src/api.js` is gone; every call goes through `frontend/src/api/`;
-  a session survives past 15 minutes without re-login.
+- ~~`frontend/src/api.js` is gone; a session survives past 15 minutes.~~ Done.
 - Food search offers USDA and Open Food Facts results; barcode works; Open
   Food Facts attribution is visible; exercise calories work.
 - Merged to `main` via PR.

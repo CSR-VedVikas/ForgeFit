@@ -14,6 +14,7 @@ from ..schemas import (
     BarcodeItem,
 )
 from ..auth import CurrentUser
+from ..clock import Clock, UserClock
 from ..config import get_settings
 from ..rate_limit import limiter
 from ..services.nutrition_api import product_by_barcode, NutritionAPIError
@@ -42,10 +43,10 @@ def _entry_from(payload: FoodLogCreate, user_id: int) -> FoodLog:
     )
 
 
-def _day_bounds(day: date | None) -> tuple[date, datetime, datetime]:
-    day = day or date.today()
-    start = datetime.combine(day, datetime.min.time())
-    return day, start, start + timedelta(days=1)
+def _day_bounds(clock: UserClock, day: date | None) -> tuple[date, datetime, datetime]:
+    day = day or clock.today()
+    start, end = clock.day_bounds(day)
+    return day, start, end
 
 
 @router.post("/log", response_model=FoodLogOut)
@@ -79,8 +80,8 @@ def log_water(payload: WaterLogCreate, user: CurrentUser, db: Session = Depends(
 
 
 @router.get("/water", response_model=list[WaterLogOut])
-def list_water(user: CurrentUser, db: Session = Depends(get_db), day: date | None = None):
-    _, start, end = _day_bounds(day)
+def list_water(user: CurrentUser, clock: Clock, db: Session = Depends(get_db), day: date | None = None):
+    _, start, end = _day_bounds(clock, day)
     return (
         db.query(WaterLog)
         .filter(WaterLog.user_id == user.id, WaterLog.logged_at >= start, WaterLog.logged_at < end)
@@ -110,8 +111,8 @@ async def barcode(request: Request, upc: str, user: CurrentUser):
 
 
 @router.get("/daily", response_model=DailyNutrition)
-def daily(user: CurrentUser, db: Session = Depends(get_db), day: date | None = None):
-    day, start, end = _day_bounds(day)
+def daily(user: CurrentUser, clock: Clock, db: Session = Depends(get_db), day: date | None = None):
+    day, start, end = _day_bounds(clock, day)
 
     foods = (
         db.query(FoodLog)

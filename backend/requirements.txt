@@ -17,5 +17,8 @@ alembic==1.14.0
 # PR6 — PostgreSQL driver. SQLite will not take concurrent writes across
 # uvicorn workers; the production config validator rejects it outright.
 psycopg[binary]==3.2.3
+# IANA timezone database for zoneinfo. Linux images ship one; Windows does
+# not, and without it every user-local day window falls over in development.
+tzdata==2025.2
 pytest==8.3.4
 pytest-asyncio==0.25.0

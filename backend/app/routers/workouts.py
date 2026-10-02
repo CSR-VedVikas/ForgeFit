@@ -6,6 +6,7 @@ from ..db import get_db
 from ..models import WorkoutSession, WorkoutSet, Profile, ExerciseCatalog
 from ..schemas import WorkoutCreate, WorkoutOut, SetOut, LastSessionSet
 from ..auth import CurrentUser
+from ..clock import Clock, to_naive_utc
 from ..services.pr_engine import apply_prs_and_achievements
 from ..services import courses as course_svc
 
@@ -61,7 +62,7 @@ def _serialize_workout(session: WorkoutSession, achievements: list | None = None
 
 
 @router.post("", response_model=WorkoutOut)
-def create_workout(payload: WorkoutCreate, user: CurrentUser, db: Session = Depends(get_db)):
+def create_workout(payload: WorkoutCreate, user: CurrentUser, clock: Clock, db: Session = Depends(get_db)):
     if not payload.sets:
         raise HTTPException(400, "At least one set required")
 
@@ -88,8 +89,8 @@ def create_workout(payload: WorkoutCreate, user: CurrentUser, db: Session = Depe
         notes=payload.notes,
         source_query=payload.source_query,
         calories_burned=payload.calories_burned,
-        started_at=payload.started_at or datetime.utcnow(),
-        ended_at=payload.ended_at or datetime.utcnow(),
+        started_at=to_naive_utc(payload.started_at) or datetime.utcnow(),
+        ended_at=to_naive_utc(payload.ended_at) or datetime.utcnow(),
     )
     db.add(session)
     db.flush()
@@ -110,7 +111,7 @@ def create_workout(payload: WorkoutCreate, user: CurrentUser, db: Session = Depe
 
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
     session = _load_full(db, session.id)
-    achievements = apply_prs_and_achievements(db, user.id, session, profile)
+    achievements = apply_prs_and_achievements(db, user.id, session, profile, clock)
     # N4 — a finished session is a course day. Same transaction as the
     # workout, so a failed commit cannot leave the cursor one day ahead.
     course_svc.advance(db, user.id)

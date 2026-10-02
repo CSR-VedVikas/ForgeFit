@@ -3,13 +3,22 @@ export default function Privacy() {
     <div className="auth-page" style={{ alignItems: 'start', paddingTop: '2rem' }}>
       <article className="auth-card" style={{ width: 'min(720px, 100%)' }}>
         <h1>Privacy & media terms</h1>
-        <p className="sub">ForgeFit — last updated July 2026</p>
+        <p className="sub">ForgeFit — last updated October 2026</p>
 
         <h3>Your data</h3>
         <p>
           Account email, profile metrics, workouts, food logs, and achievements are stored in the app database
-          for your account only. Passwords are hashed (bcrypt). JWT tokens are stored in your browser
-          (localStorage) until you sign out.
+          for your account only. Passwords are hashed (bcrypt).
+        </p>
+        <p>
+          Signing in creates two credentials. A short-lived access token (15 minutes) is kept in your browser's
+          localStorage. A longer-lived session cookie (up to 14 days) is marked httpOnly, so page scripts cannot
+          read it; it is used only to renew the access token. Signing out revokes the session on the server and
+          deletes both. Changing or resetting your password signs out every device.
+        </p>
+        <p>
+          Your device's time zone is sent with each request so that daily totals, streaks, and weekly challenges
+          follow your local day. It is not stored.
         </p>
 
         <h3>Third-party APIs</h3>

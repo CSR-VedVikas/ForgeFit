@@ -2,6 +2,7 @@ from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
+from ..clock import UserClock
 from ..models import (
     WorkoutSession,
     WorkoutSet,
@@ -37,8 +38,13 @@ def apply_prs_and_achievements(
     user_id: int,
     session: WorkoutSession,
     profile: Profile | None,
+    clock: UserClock | None = None,
 ) -> list[Achievement]:
-    """Compute volumes, detect PRs once per exercise/metric, emit achievements."""
+    """Compute volumes, detect PRs once per exercise/metric, emit achievements.
+
+    clock decides which week the volume counts toward and which days the
+    streak covers; it defaults to UTC for callers outside a request."""
+    clock = clock or UserClock()
     new_achievements: list[Achievement] = []
 
     prior_count = (
@@ -188,15 +194,10 @@ def apply_prs_and_achievements(
         db.add(ach)
 
     session.total_volume = sum(x.volume for x in sets)
-    _update_challenge(db, user_id, session.total_volume, new_achievements)
-    _check_streak(db, user_id, new_achievements)
+    _update_challenge(db, user_id, session.total_volume, new_achievements, clock)
+    _check_streak(db, user_id, new_achievements, clock)
     db.flush()
     return new_achievements
-
-
-def _week_start(d: date | None = None) -> date:
-    d = d or date.today()
-    return d - timedelta(days=d.weekday())
 
 
 def _update_challenge(
@@ -204,8 +205,9 @@ def _update_challenge(
     user_id: int,
     added_volume: float,
     new_achievements: list[Achievement],
+    clock: UserClock,
 ) -> None:
-    ws = _week_start()
+    ws = clock.week_start()
     challenge = (
         db.query(ChallengeProgress)
         .filter(ChallengeProgress.user_id == user_id, ChallengeProgress.week_start == ws)
@@ -221,8 +223,7 @@ def _update_challenge(
         if last and last.current_volume > 0:
             target = last.current_volume * 1.05
         else:
-            start = datetime.combine(last_ws, datetime.min.time())
-            end = datetime.combine(ws, datetime.min.time())
+            start, end = clock.week_bounds(last_ws)
             prev_vol = (
                 db.query(func.coalesce(func.sum(WorkoutSession.total_volume), 0.0))
                 .filter(
@@ -255,21 +256,24 @@ def _update_challenge(
         new_achievements.append(ach)
 
 
-def _check_streak(db: Session, user_id: int, new_achievements: list[Achievement]) -> None:
+def _check_streak(
+    db: Session, user_id: int, new_achievements: list[Achievement], clock: UserClock
+) -> None:
     sessions = (
         db.query(WorkoutSession.started_at)
         .filter(WorkoutSession.user_id == user_id)
         .order_by(WorkoutSession.started_at.desc())
         .all()
     )
-    days = sorted({s.started_at.date() for s in sessions}, reverse=True)
+    days = sorted({clock.local_date(s.started_at) for s in sessions}, reverse=True)
+    today = clock.today()
     streak = 0
-    cursor = date.today()
+    cursor = today
     for d in days:
         if d == cursor:
             streak = max(streak, 1)
             continue
-        if streak == 0 and d == date.today() - timedelta(days=1):
+        if streak == 0 and d == today - timedelta(days=1):
             streak = 1
             cursor = d
             continue
@@ -297,17 +301,19 @@ def _check_streak(db: Session, user_id: int, new_achievements: list[Achievement]
             new_achievements.append(ach)
 
 
-def compute_streak(db: Session, user_id: int) -> int:
+def compute_streak(db: Session, user_id: int, clock: UserClock | None = None) -> int:
+    clock = clock or UserClock()
     sessions = (
         db.query(WorkoutSession.started_at)
         .filter(WorkoutSession.user_id == user_id)
         .order_by(WorkoutSession.started_at.desc())
         .all()
     )
-    days = sorted({s.started_at.date() for s in sessions}, reverse=True)
+    days = sorted({clock.local_date(s.started_at) for s in sessions}, reverse=True)
     if not days:
         return 0
-    if days[0] not in (date.today(), date.today() - timedelta(days=1)):
+    today = clock.today()
+    if days[0] not in (today, today - timedelta(days=1)):
         return 0
     streak = 0
     cursor = days[0]

@@ -116,7 +116,7 @@ app.add_middleware(
     allow_origin_regex=settings.effective_cors_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Timezone"],
 )
 
 app.include_router(auth.router)
