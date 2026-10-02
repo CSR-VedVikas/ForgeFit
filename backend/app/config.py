@@ -24,9 +24,14 @@ LAN_DEV_ORIGIN_REGEX = (
 
 class Settings(BaseSettings):
     openai_api_key: str = ""
+    # Exercise calories only — the provider dropped its food endpoints.
     nutrition_app_id: str = ""
     nutrition_app_key: str = ""
-    nutrition_api_base_url: str = "https://app.100daysofpython.dev/services/nutrition/v2"
+    nutrition_api_base_url: str = "https://app.100daysofpython.dev/v1/nutrition"
+    # Food: USDA FoodData Central (free key, 3,600 requests/hour) and Open
+    # Food Facts (no key). Without a USDA key food search uses Open Food Facts
+    # alone rather than failing.
+    usda_fdc_api_key: str = ""
     jwt_secret: str = DEV_JWT_SECRET
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15

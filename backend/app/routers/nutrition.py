@@ -11,13 +11,13 @@ from ..schemas import (
     DailyNutrition,
     WaterLogCreate,
     WaterLogOut,
-    BarcodeItem,
+    DraftFood,
 )
 from ..auth import CurrentUser
 from ..clock import Clock, UserClock
 from ..config import get_settings
 from ..rate_limit import limiter
-from ..services.nutrition_api import product_by_barcode, NutritionAPIError
+from ..services import food_sources
 
 router = APIRouter(prefix="/api/nutrition", tags=["nutrition"])
 settings = get_settings()
@@ -40,6 +40,8 @@ def _entry_from(payload: FoodLogCreate, user_id: int) -> FoodLog:
         # N1 — these used to stop here.
         quantity=payload.quantity,
         unit=payload.unit or "",
+        source=payload.source or "",
+        source_ref=payload.source_ref or "",
     )
 
 
@@ -90,24 +92,25 @@ def list_water(user: CurrentUser, clock: Clock, db: Session = Depends(get_db), d
     )
 
 
-@router.get("/barcode/{upc}", response_model=BarcodeItem)
+@router.get("/barcode/{upc}", response_model=DraftFood)
 @limiter.limit(settings.rate_limit_nlp)
 async def barcode(request: Request, upc: str, user: CurrentUser):
-    """N5 — look a packaged product up by UPC/EAN. Hits the provider's item
-    endpoint, which is separate from natural/nutrients; the result is shaped
-    like a DraftFood so the portion editor treats it the same as a parsed
-    entry. The frontend's pre-permission explainer runs before the scanner,
-    not here."""
+    """A packaged product by UPC/EAN: Open Food Facts first (its strength),
+    USDA Branded as the fallback. Returned as a DraftFood at one serving, so
+    a scanned product joins Smart Log's list exactly like a typed one."""
     upc = "".join(ch for ch in upc if ch.isdigit())
     if not 8 <= len(upc) <= 14:
         raise HTTPException(400, "A barcode is 8 to 14 digits")
-    try:
-        item = await product_by_barcode(upc)
-    except NutritionAPIError as e:
-        raise HTTPException(502, str(e))
-    if not item:
+    found, warnings = await food_sources.lookup_barcode(upc)
+    if not found:
+        if warnings:
+            raise HTTPException(502, " ".join(warnings))
         raise HTTPException(404, "No product matches that barcode")
-    return BarcodeItem(upc=upc, **item)
+    grams = food_sources.resolve_grams(found, None, 1)
+    return food_sources.to_draft(
+        [found], 0, grams, query=upc, quantity=1,
+        unit=found.serving_label or None, confidence=0.95,
+    )
 
 
 @router.get("/daily", response_model=DailyNutrition)

@@ -160,6 +160,10 @@ class FoodLog(Base):
     # dropped on save. Nullable because entries logged before N1 have neither.
     quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
     unit: Mapped[str] = mapped_column(String(32), default="")
+    # Which database the numbers came from ("usda" | "off") and the item's id
+    # there. Open Food Facts is ODbL-licensed, so attribution needs to know.
+    source: Mapped[str] = mapped_column(String(16), default="")
+    source_ref: Mapped[str] = mapped_column(String(64), default="")
 
     user: Mapped["User"] = relationship(back_populates="food_logs")
 

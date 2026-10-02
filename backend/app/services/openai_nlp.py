@@ -143,3 +143,117 @@ def _heuristic_strength(text: str) -> dict[str, Any]:
             }
         )
     return {"sets": sets, "confidence": 0.5 if sets else 0.2}
+
+
+# ── food ──────────────────────────────────────────────────────────────
+# Food lookup moved to USDA + Open Food Facts, which search one food at a time
+# and answer per 100 g. So the sentence is first split into items with an
+# amount in grams, and after the search the best candidate is picked per item.
+
+FOOD_ITEMS_SYSTEM = """Split a meal description into individual foods.
+Return JSON only:
+{"items": [{"name": "plain food name a nutrition database would use",
+            "quantity": number or null, "unit": "as the user said it, or null",
+            "grams": number — your best estimate of the total edible weight}]}
+Keep brand names in "name" when the user gave one ("chobani greek yogurt").
+"2 eggs" -> name "egg", quantity 2, unit null, grams 100.
+"a bowl of rice" -> name "white rice cooked", quantity 1, unit "bowl", grams 200.
+"""
+
+FOOD_PICK_SYSTEM = """For each food a user ate, choose the database entry that
+best matches what they most likely meant. Prefer the plain, common form over
+dishes, desserts, or flavoured variants unless the user said so. If the user
+named a brand, prefer that brand.
+Return JSON only: {"picks": [index or null, ...]} — one entry per food, in
+order, where index refers to that food's numbered candidates."""
+
+_UNIT_GRAMS = {"g": 1, "gram": 1, "grams": 1, "kg": 1000, "ml": 1, "l": 1000, "oz": 28.35, "lb": 453.6}
+_NUMBER_WORDS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                 "six": 6, "half": 0.5, "half a": 0.5}
+
+
+async def parse_food_items(text: str) -> list[dict[str, Any]]:
+    client = _client()
+    if client:
+        try:
+            resp = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                temperature=0,
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": FOOD_ITEMS_SYSTEM},
+                    {"role": "user", "content": text},
+                ],
+            )
+            items = json.loads(resp.choices[0].message.content or "{}").get("items") or []
+            items = [i for i in items if isinstance(i, dict) and (i.get("name") or "").strip()]
+            if items:
+                return items
+        except _FALLBACK_ERRORS as e:
+            logger.warning('"openai_fallback":"parse_food_items","error":"%s"', type(e).__name__)
+    return _heuristic_food_items(text)
+
+
+def _heuristic_food_items(text: str) -> list[dict[str, Any]]:
+    """Offline splitter for "2 eggs, 150g rice and a banana". It has no idea
+    how much an egg weighs, so grams stay null unless the unit is a weight —
+    the caller then uses the matched food's household portion."""
+    import re
+
+    t = re.sub(r"^\s*(i\s+)?(ate|had|eaten|drank)\s+", "", text.strip(), flags=re.I)
+    parts = [p.strip(" .") for p in re.split(r",|\band\b|\bthen\b|\+|;", t, flags=re.I) if p.strip(" .")]
+    pattern = re.compile(
+        r"^(?P<qty>\d+/\d+|\d+(?:\.\d+)?|half a|an?|one|two|three|four|five|six|half)?\s*"
+        r"(?P<unit>g|grams?|kg|ml|l|oz|lb|cups?|tbsp|tsp|slices?|pieces?|bowls?|glass(?:es)?)?\b\s*"
+        r"(?:of\s+)?(?P<name>.+)$",
+        re.I,
+    )
+    items = []
+    for part in parts:
+        m = pattern.match(part)
+        if not m or not m.group("name").strip():
+            continue
+        raw_qty = (m.group("qty") or "").lower()
+        if "/" in raw_qty:
+            a, b = raw_qty.split("/")
+            qty = float(a) / float(b) if float(b) else None
+        elif raw_qty:
+            qty = _NUMBER_WORDS.get(raw_qty) or float(raw_qty)
+        else:
+            qty = None
+        unit = (m.group("unit") or "").lower() or None
+        grams = qty * _UNIT_GRAMS[unit] if qty and unit in _UNIT_GRAMS else None
+        items.append({"name": m.group("name").strip(), "quantity": qty, "unit": unit, "grams": grams})
+    return items
+
+
+async def pick_food_matches(items: list[dict[str, Any]]) -> list[int | None]:
+    """items: [{"text": what the user said, "candidates": ["name [brand]", ...]}].
+    Returns one candidate index (or None) per item. Without OpenAI, or when it
+    fails, returns all None and the caller keeps its own ranking."""
+    client = _client()
+    if not client or not items:
+        return [None] * len(items)
+    listing = "\n".join(
+        f"Food {n}: {it['text']}\n" + "\n".join(f"  {i}. {c}" for i, c in enumerate(it["candidates"]))
+        for n, it in enumerate(items)
+    )
+    try:
+        resp = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": FOOD_PICK_SYSTEM},
+                {"role": "user", "content": listing},
+            ],
+        )
+        picks = json.loads(resp.choices[0].message.content or "{}").get("picks") or []
+    except _FALLBACK_ERRORS as e:
+        logger.warning('"openai_fallback":"pick_food_matches","error":"%s"', type(e).__name__)
+        return [None] * len(items)
+    out: list[int | None] = []
+    for n, it in enumerate(items):
+        p = picks[n] if n < len(picks) else None
+        out.append(p if isinstance(p, int) and 0 <= p < len(it["candidates"]) else None)
+    return out
