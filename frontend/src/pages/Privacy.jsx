@@ -23,9 +23,11 @@ export default function Privacy() {
 
         <h3>Third-party APIs</h3>
         <p>
-          Natural-language food and calorie estimates may be sent to the Nutrition API provider. Workout text
-          may be sent to OpenAI (or your configured NLP provider) for parsing. Do not enter sensitive personal
-          data in NLP fields.
+          Text you type into Smart Log is sent to OpenAI to split it into foods and exercises. Food names (not
+          your account details) are looked up in USDA FoodData Central and Open Food Facts; barcodes are looked
+          up in the same two databases. Cardio descriptions, with your weight, height, age and gender, are sent
+          to the 100 Days of Python nutrition API to estimate calories burned. Do not enter sensitive personal
+          data in Smart Log.
         </p>
 
         <h3>Exercise media</h3>

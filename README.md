@@ -1,12 +1,13 @@
 # ForgeFit
 
-Multi-user fitness PWA for logging workouts and meals. FastAPI + SQLite/Postgres + JWT on the backend; React/Vite on the frontend. Natural-language logging routes food/cardio calories through a Nutrition API and strength sets through OpenAI (with regex fallback), then fuzzy-matches exercises to a local catalog with form GIFs.
+Multi-user fitness PWA for logging workouts and meals. FastAPI + SQLite/Postgres + JWT on the backend; React/Vite on the frontend. Natural-language logging splits meals into foods with OpenAI and looks each one up in USDA FoodData Central and Open Food Facts; strength sets are parsed by OpenAI (with a regex fallback) and fuzzy-matched to a local catalog with form GIFs; cardio calories come from the 100 Days of Python API.
 
 ## Features
 
 - Register / login, profile biometrics, password reset
 - Live workouts: empty session or up to 3 saved routines; kg × reps set sheet; session timer + summary
-- Smart Log NLP (parse → preview → confirm)
+- Smart Log NLP (parse → preview → confirm), with a per-food choice of match from USDA or Open Food Facts and editable grams
+- Food by barcode (Open Food Facts, USDA Branded as fallback)
 - Daily workout + food link, PRs / achievements, muscle heatmap, weekly volume challenge
 - Exercises library with form GIFs; privacy page; PWA offline shell
 - Docker deploy; rate limits; security headers; TLS
@@ -17,7 +18,9 @@ Multi-user fitness PWA for logging workouts and meals. FastAPI + SQLite/Postgres
 | --- | --- |
 | API | FastAPI, SQLAlchemy, Alembic, JWT |
 | UI | React, Vite, PWA |
-| NLP | OpenAI + Nutrition API (100 Days of Python portal) |
+| NLP | OpenAI `gpt-4o-mini` (regex fallback when unavailable) |
+| Food data | USDA FoodData Central + Open Food Facts |
+| Exercise calories | 100 Days of Python nutrition API |
 | Data | PostgreSQL in production, SQLite for local development |
 | Media | Local `exercises-dataset-main` (~1,324 exercises, 180×180 GIFs) |
 
@@ -83,9 +86,10 @@ Copy `backend/.env.example` → `backend/.env` for development, or `deploy/produ
 | Variable | Purpose |
 | --- | --- |
 | `JWT_SECRET` | **Required.** ≥32 chars in production; boot fails otherwise |
-| `OPENAI_API_KEY` | Strength / intent NLP (optional; regex fallback without it) |
-| `NUTRITION_APP_ID` / `NUTRITION_APP_KEY` | Food + exercise calories via 100 Days portal |
-| `NUTRITION_API_BASE_URL` | Must end in `/v2` — pointing at `/docs` silently breaks food lookups |
+| `OPENAI_API_KEY` | Smart Log parsing and food-match picking (optional; regex fallback without it) |
+| `USDA_FDC_API_KEY` | Food search. Free key: https://fdc.nal.usda.gov/api-key-signup. Without it, food search uses Open Food Facts only |
+| `NUTRITION_APP_ID` / `NUTRITION_APP_KEY` | Exercise calories via the 100 Days of Python portal |
+| `NUTRITION_API_BASE_URL` | `https://app.100daysofpython.dev/v1/nutrition` — the provider moved there and dropped its food endpoints |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Access token lifetime (default 15) |
 | `REFRESH_TOKEN_EXPIRE_MINUTES` | Refresh token lifetime (default 14 days) |
 | `REFRESH_COOKIE_SAMESITE` | `lax` unless API and frontend are on different sites |
@@ -98,7 +102,9 @@ Copy `backend/.env.example` → `backend/.env` for development, or `deploy/produ
 | `MAX_NLP_CHARS` | Cap on NLP input length |
 | `SENTRY_DSN` | Optional error tracking |
 
-Portal Nutrition keys (`app_…` / `nix_live_…`) must use the 100 Days base URL — not raw `trackapi.nutritionix.com`.
+Portal keys (`app_…` / `nix_live_…`) work only against the 100 Days base URL, not `trackapi.nutritionix.com`.
+
+Open Food Facts needs no key. Its data is ODbL-licensed: the app shows "Food data from … Open Food Facts (ODbL)" wherever its results appear, and every request identifies ForgeFit in its User-Agent, as their API terms ask.
 
 ## Production readiness
 
