@@ -25,17 +25,17 @@ from ..schemas import (
     ActivityDay,
 )
 from ..auth import CurrentUser
-from ..services.pr_engine import compute_streak, _week_start
+from ..clock import Clock
+from ..services.pr_engine import compute_streak
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 
 @router.get("/daily-link", response_model=DailyLinkOut)
-def daily_link(user: CurrentUser, db: Session = Depends(get_db), day: date | None = None):
+def daily_link(user: CurrentUser, clock: Clock, db: Session = Depends(get_db), day: date | None = None):
     """Link today's workouts + food into one day summary."""
-    day = day or date.today()
-    start = datetime.combine(day, datetime.min.time())
-    end = start + timedelta(days=1)
+    day = day or clock.today()
+    start, end = clock.day_bounds(day)
 
     foods = (
         db.query(FoodLog)
@@ -101,10 +101,8 @@ def daily_link(user: CurrentUser, db: Session = Depends(get_db), day: date | Non
 
 
 @router.get("/dashboard", response_model=DashboardOut)
-def dashboard(user: CurrentUser, db: Session = Depends(get_db)):
-    today = date.today()
-    start = datetime.combine(today, datetime.min.time())
-    end = start + timedelta(days=1)
+def dashboard(user: CurrentUser, clock: Clock, db: Session = Depends(get_db)):
+    start, end = clock.day_bounds(clock.today())
 
     foods = (
         db.query(FoodLog)
@@ -147,7 +145,7 @@ def dashboard(user: CurrentUser, db: Session = Depends(get_db)):
         for pr, ex in prs
     ]
 
-    ws = _week_start()
+    ws = clock.week_start()
     challenge = (
         db.query(ChallengeProgress)
         .filter(ChallengeProgress.user_id == user.id, ChallengeProgress.week_start == ws)
@@ -183,7 +181,7 @@ def dashboard(user: CurrentUser, db: Session = Depends(get_db)):
         calories_burned=round(calories_burned, 1),
         calorie_goal=goal,
         volume_today=round(volume_today, 1),
-        streak_days=compute_streak(db, user.id),
+        streak_days=compute_streak(db, user.id, clock),
         recent_prs=recent_prs,
         challenge=challenge_out,
         recent_achievements=achievements,
@@ -223,7 +221,7 @@ def heatmap(user: CurrentUser, db: Session = Depends(get_db), days: int = 7):
 
 
 @router.get("/volume")
-def volume_stats(user: CurrentUser, db: Session = Depends(get_db), days: int = 30):
+def volume_stats(user: CurrentUser, clock: Clock, db: Session = Depends(get_db), days: int = 30):
     since = datetime.utcnow() - timedelta(days=days)
     sessions = (
         db.query(WorkoutSession)
@@ -233,13 +231,13 @@ def volume_stats(user: CurrentUser, db: Session = Depends(get_db), days: int = 3
     )
     by_day: dict[str, float] = {}
     for s in sessions:
-        key = s.started_at.date().isoformat()
+        key = clock.local_date(s.started_at).isoformat()
         by_day[key] = by_day.get(key, 0) + s.total_volume
     return {"days": [{"date": k, "volume": v} for k, v in by_day.items()]}
 
 
 @router.get("/activity", response_model=ActivityOut)
-def activity_stats(user: CurrentUser, db: Session = Depends(get_db), days: int = 90):
+def activity_stats(user: CurrentUser, clock: Clock, db: Session = Depends(get_db), days: int = 90):
     """Profile chart: duration / volume / reps by day + this-week hours."""
     since = datetime.utcnow() - timedelta(days=days)
     sessions = (
@@ -251,7 +249,7 @@ def activity_stats(user: CurrentUser, db: Session = Depends(get_db), days: int =
     )
     by_day: dict[str, ActivityDay] = {}
     for s in sessions:
-        key = s.started_at.date().isoformat()
+        key = clock.local_date(s.started_at).isoformat()
         if key not in by_day:
             by_day[key] = ActivityDay(date=key)
         day = by_day[key]
@@ -262,7 +260,7 @@ def activity_stats(user: CurrentUser, db: Session = Depends(get_db), days: int =
         day.volume += s.total_volume or 0
         day.reps += sum(int(st.reps or 0) for st in s.sets)
 
-    week_start = datetime.combine(_week_start(), datetime.min.time())
+    week_start, _ = clock.week_bounds()
     week_hours = 0.0
     for s in sessions:
         if s.started_at >= week_start and s.ended_at:
