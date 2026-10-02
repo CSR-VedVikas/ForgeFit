@@ -1,17 +1,77 @@
+# Production stack.
+#
+# Secrets are NOT read from backend/.env any more (PR1). That file is a
+# developer's local scratch and lives in the working tree. Create
+# deploy/production.env outside version control — it is gitignored — or
+# replace env_file with your host's secret store.
+#
+#   cp deploy/production.env.example deploy/production.env
+#   python -c "import secrets; print(secrets.token_urlsafe(48))"   # JWT_SECRET
+#
+# Bring the stack up with that file supplying BOTH container environment and
+# compose's own ${...} interpolation — env_file only does the former:
+#
+#   docker compose --env-file deploy/production.env up --build -d
+#
+# The backend now refuses to start in production with a placeholder secret,
+# SQLite, docs enabled, or an empty CORS allowlist (PR2).
+
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: forgefit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/production.env}
+      POSTGRES_DB: forgefit
+    volumes:
+      - forgefit_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forgefit -d forgefit"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PR4 — schema is Alembic's job. This runs to completion before the API
+  # starts, and the API refuses to serve if the schema is not at head.
+  migrate:
+    build:
+      context: .
+      target: backend
+    env_file:
+      - ./deploy/production.env
+    environment:
+      ENVIRONMENT: production
+      ENABLE_DOCS: "false"
+      DATABASE_URL: postgresql+psycopg://forgefit:${POSTGRES_PASSWORD}@db:5432/forgefit
+    command: ["alembic", "upgrade", "head"]
+    working_dir: /app
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     build:
       context: .
       target: backend
     env_file:
-      - ./backend/.env
+      - ./deploy/production.env
     environment:
       ENVIRONMENT: production
       ENABLE_DOCS: "false"
-      DATABASE_URL: sqlite:////data/forgefit.db
-      CORS_ORIGINS: http://localhost,http://127.0.0.1
-    volumes:
-      - forgefit_data:/data
+      DATABASE_URL: postgresql+psycopg://forgefit:${POSTGRES_PASSWORD}@db:5432/forgefit
+      # PR11 — one proxy hop (nginx). Raise only if you actually add another.
+      BEHIND_PROXY: "true"
+      TRUSTED_PROXY_HOPS: "1"
+      # PR5 — the refresh cookie is Secure in production, so this stack only
+      # works over the TLS listener in deploy/nginx.conf.
+      REFRESH_COOKIE_SAMESITE: lax
+      CORS_ORIGINS: ${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN, e.g. https://forgefit.example.com}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
       interval: 30s
@@ -23,10 +83,16 @@ services:
       context: .
       target: web
     ports:
-      - "8080:80"
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Mount real certificates here. See deploy/nginx.conf for the
+      # no-certificate-yet fallback.
+      - ./deploy/certs:/etc/nginx/certs:ro
+      - ./deploy/certbot:/var/www/certbot
     depends_on:
       backend:
         condition: service_started
 
 volumes:
-  forgefit_data:
+  forgefit_pg:
