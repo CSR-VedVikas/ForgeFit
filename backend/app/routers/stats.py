@@ -1,5 +1,5 @@
 from datetime import datetime, date, timedelta
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
@@ -200,7 +200,7 @@ def achievements(user: CurrentUser, db: Session = Depends(get_db)):
 
 
 @router.get("/heatmap", response_model=list[HeatmapItem])
-def heatmap(user: CurrentUser, db: Session = Depends(get_db), days: int = 7):
+def heatmap(user: CurrentUser, db: Session = Depends(get_db), days: int = Query(7, ge=1, le=366)):
     since = datetime.utcnow() - timedelta(days=days)
     rows = (
         db.query(
@@ -221,7 +221,7 @@ def heatmap(user: CurrentUser, db: Session = Depends(get_db), days: int = 7):
 
 
 @router.get("/volume")
-def volume_stats(user: CurrentUser, clock: Clock, db: Session = Depends(get_db), days: int = 30):
+def volume_stats(user: CurrentUser, clock: Clock, db: Session = Depends(get_db), days: int = Query(30, ge=1, le=366)):
     since = datetime.utcnow() - timedelta(days=days)
     sessions = (
         db.query(WorkoutSession)
@@ -237,7 +237,7 @@ def volume_stats(user: CurrentUser, clock: Clock, db: Session = Depends(get_db),
 
 
 @router.get("/activity", response_model=ActivityOut)
-def activity_stats(user: CurrentUser, clock: Clock, db: Session = Depends(get_db), days: int = 90):
+def activity_stats(user: CurrentUser, clock: Clock, db: Session = Depends(get_db), days: int = Query(90, ge=1, le=366)):
     """Profile chart: duration / volume / reps by day + this-week hours."""
     since = datetime.utcnow() - timedelta(days=days)
     sessions = (

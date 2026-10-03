@@ -7,7 +7,7 @@ from pydantic import BaseModel, EmailStr, Field
 class UserRegister(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=72)
-    display_name: str = ""
+    display_name: str = Field(default="", max_length=120)
 
 
 class UserLogin(BaseModel):
@@ -61,13 +61,15 @@ class MessageOut(BaseModel):
 
 # ---- Profile ----
 class ProfileUpdate(BaseModel):
-    display_name: Optional[str] = None
-    gender: Optional[str] = None
-    weight_kg: Optional[float] = None
-    height_cm: Optional[float] = None
-    age: Optional[int] = None
-    daily_calorie_goal: Optional[int] = None
-    rest_seconds: Optional[int] = None
+    # Bounds reject nonsense, not unusual people. All were unbounded: a negative
+    # weight flowed into calorie-burn estimates and the water goal.
+    display_name: Optional[str] = Field(default=None, max_length=120)
+    gender: Optional[str] = Field(default=None, max_length=20)
+    weight_kg: Optional[float] = Field(default=None, gt=20, le=400)
+    height_cm: Optional[float] = Field(default=None, ge=50, le=280)
+    age: Optional[int] = Field(default=None, ge=13, le=120)
+    daily_calorie_goal: Optional[int] = Field(default=None, ge=500, le=10000)
+    rest_seconds: Optional[int] = Field(default=None, ge=0, le=1800)
 
 
 class ProfileOut(BaseModel):
@@ -188,17 +190,19 @@ class ParseResponse(BaseModel):
 
 # ---- Workouts ----
 class SetCreate(BaseModel):
-    exercise_id: str
-    weight_kg: float = 0
-    reps: int
-    set_number: int = 1
+    # Was unbounded: a 10,000 kg set or -5 reps was accepted, became a
+    # "personal record", and could never be beaten honestly.
+    exercise_id: str = Field(max_length=8)
+    weight_kg: float = Field(default=0, ge=0, le=1000)
+    reps: int = Field(ge=1, le=1000)
+    set_number: int = Field(default=1, ge=1, le=100)
 
 
 class WorkoutCreate(BaseModel):
-    notes: str = ""
-    source_query: str = ""
-    calories_burned: float = 0
-    sets: list[SetCreate]
+    notes: str = Field(default="", max_length=2000)
+    source_query: str = Field(default="", max_length=1000)
+    calories_burned: float = Field(default=0, ge=0, le=10000)
+    sets: list[SetCreate] = Field(max_length=200)
     started_at: Optional[datetime] = None
     ended_at: Optional[datetime] = None
     # W1 — set by session-queue.js before the network is involved. A retry
@@ -248,14 +252,14 @@ class LastSessionSet(BaseModel):
 
 # ---- Nutrition ----
 class FoodLogCreate(BaseModel):
-    query_text: str = ""
-    food_name: str
-    calories: float
-    protein: float = 0
-    carbs: float = 0
-    fat: float = 0
-    meal_type: str = "snack"
-    source_confidence: float = 1.0
+    query_text: str = Field(default="", max_length=1000)
+    food_name: str = Field(min_length=1, max_length=255)
+    calories: float = Field(ge=0, le=20000)
+    protein: float = Field(default=0, ge=0, le=2000)
+    carbs: float = Field(default=0, ge=0, le=2000)
+    fat: float = Field(default=0, ge=0, le=2000)
+    meal_type: str = Field(default="snack", max_length=32)
+    source_confidence: float = Field(default=1.0, ge=0, le=1)
     # N1 — portion. nlp.parse already returns these on DraftFood.
     quantity: Optional[float] = Field(default=None, ge=0)
     unit: str = Field(default="", max_length=32)
@@ -385,7 +389,7 @@ class RoutineExerciseIn(BaseModel):
 
 class RoutineCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    exercises: list[RoutineExerciseIn] = []
+    exercises: list[RoutineExerciseIn] = Field(default=[], max_length=40)
 
 
 class RoutineUpdate(BaseModel):

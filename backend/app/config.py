@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     environment: str = "development"  # development | production
     sentry_dsn: str = ""
     enable_docs: bool = True
+    # Development only: return the password-reset token in the API response so
+    # recovery can be tested without email. Must be switched on explicitly.
+    # It used to follow "not production", and ENVIRONMENT defaults to
+    # development — so a server started without that one variable answered
+    # every reset request with a working token for any account.
+    expose_reset_token: bool = False
     rate_limit_auth: str = "10/minute"
     rate_limit_nlp: str = "20/minute"
     max_nlp_chars: int = 500
@@ -124,6 +130,12 @@ class Settings(BaseSettings):
 
         if self.enable_docs:
             problems.append("ENABLE_DOCS must be false in production.")
+
+        if self.expose_reset_token:
+            problems.append(
+                "EXPOSE_RESET_TOKEN must be false in production: it returns a "
+                "working password-reset token to whoever asks, for any account."
+            )
 
         if not self.cors_origin_list:
             problems.append(
