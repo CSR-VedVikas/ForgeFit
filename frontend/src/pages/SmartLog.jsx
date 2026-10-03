@@ -10,6 +10,7 @@ export default function SmartLog() {
   const [achievements, setAchievements] = useState(null)
   const [mealType, setMealType] = useState('snack')
   const [dayLink, setDayLink] = useState(null)
+  const [barcode, setBarcode] = useState('')
 
   async function parse() {
     setError('')
@@ -35,6 +36,81 @@ export default function SmartLog() {
       return { ...d, sets }
     })
   }
+
+  /* Every food carries all its options per 100 g, so switching the match or
+   * editing the grams is arithmetic here — no second lookup. */
+  function scaled(opt, grams) {
+    const k = (Number(grams) || 0) / 100
+    return {
+      calories: opt.kcal_100g * k,
+      protein: opt.protein_100g * k,
+      carbs: opt.carbs_100g * k,
+      fat: opt.fat_100g * k,
+    }
+  }
+
+  function updateFood(i, fn) {
+    setDraft((d) => {
+      const foods = [...d.foods]
+      foods[i] = fn(foods[i])
+      return { ...d, foods }
+    })
+  }
+
+  function chooseOption(i, idx) {
+    updateFood(i, (f) => {
+      const o = f.options[idx]
+      return {
+        ...f,
+        selected: idx,
+        food_name: o.name,
+        brand: o.brand,
+        source: o.source,
+        source_ref: o.ref,
+        ...scaled(o, f.grams),
+      }
+    })
+  }
+
+  function setGrams(i, grams) {
+    updateFood(i, (f) => ({ ...f, grams, ...(f.options?.length ? scaled(f.options[f.selected], grams) : {}) }))
+  }
+
+  function removeFood(i) {
+    setDraft((d) => ({ ...d, foods: d.foods.filter((_, j) => j !== i) }))
+  }
+
+  async function addBarcode() {
+    const code = barcode.replace(/\D/g, '')
+    if (!code) return
+    setError('')
+    setBusy(true)
+    try {
+      const food = await api(`/api/nutrition/barcode/${code}`)
+      setDraft((d) =>
+        d
+          ? { ...d, foods: [...(d.foods || []), food] }
+          : {
+              intent: 'food',
+              confidence: food.confidence,
+              sets: [],
+              foods: [food],
+              cardio: [],
+              calories_burned: 0,
+              warnings: [],
+              raw_query: '',
+            }
+      )
+      setBarcode('')
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const sourceName = (src) => (src === 'off' ? 'Open Food Facts' : src === 'usda' ? 'USDA' : src)
+  const showsOFF = draft?.foods?.some((f) => f.options?.some((o) => o.source === 'off'))
 
   function pickSuggestion(i, sug) {
     updateSet(i, {
@@ -80,6 +156,10 @@ export default function SmartLog() {
               fat: f.fat,
               meal_type: mealType,
               source_confidence: f.confidence,
+              quantity: f.grams ?? null,
+              unit: f.grams ? 'g' : '',
+              source: f.source || '',
+              source_ref: f.source_ref || '',
             }))
           ),
         })
@@ -105,7 +185,10 @@ export default function SmartLog() {
   return (
     <div>
       <h1 className="page-title">Smart Log</h1>
-      <p className="page-sub">Type a workout or meal. Nutrition API + OpenAI route for highest confidence.</p>
+      <p className="page-sub">
+        Type a workout or meal. Foods are matched in USDA and Open Food Facts — check the match and the grams
+        before saving.
+      </p>
 
       <div className="panel nlp-box">
         <textarea
@@ -122,6 +205,19 @@ export default function SmartLog() {
           </select>
           <button type="button" className="btn btn-primary" disabled={busy || !text.trim()} onClick={parse}>
             {busy ? 'Parsing…' : 'Parse'}
+          </button>
+        </div>
+        <div className="filters" style={{ marginTop: '0.75rem' }}>
+          <input
+            inputMode="numeric"
+            value={barcode}
+            onChange={(e) => setBarcode(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addBarcode()}
+            placeholder="Barcode"
+            aria-label="Barcode"
+          />
+          <button type="button" className="btn btn-ghost" disabled={busy || !barcode.trim()} onClick={addBarcode}>
+            Add by barcode
           </button>
         </div>
         {error && <div className="error">{error}</div>}
@@ -182,14 +278,58 @@ export default function SmartLog() {
           ))}
 
           {draft.foods?.map((f, i) => (
-            <div className="list-row" key={`f-${i}`}>
-              <div>
-                <strong>{f.food_name}</strong>
-                <div style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
-                  {Math.round(f.calories)} kcal · P{Math.round(f.protein)} C{Math.round(f.carbs)} F
-                  {Math.round(f.fat)}
+            <div className="list-row" key={`f-${i}`} style={{ display: 'block' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                <div style={{ minWidth: 0 }}>
+                  <strong>{f.food_name}</strong>
+                  {f.brand && <span style={{ color: 'var(--muted)' }}> · {f.brand}</span>}
+                  <div style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
+                    {Math.round(f.calories)} kcal · P{Math.round(f.protein)} C{Math.round(f.carbs)} F
+                    {Math.round(f.fat)}
+                    {f.source && ` · ${sourceName(f.source)}`}
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => removeFood(i)}
+                  aria-label={`Remove ${f.food_name}`}
+                >
+                  ✕
+                </button>
               </div>
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', alignItems: 'center' }}>
+                {f.options?.length > 1 && (
+                  <select
+                    value={f.selected}
+                    onChange={(e) => chooseOption(i, Number(e.target.value))}
+                    style={{ flex: 1, minWidth: 0 }}
+                    aria-label={`Match for ${f.query || f.food_name}`}
+                  >
+                    {f.options.map((o, j) => (
+                      <option key={`${o.source}-${o.ref}`} value={j}>
+                        {sourceName(o.source)} · {o.name}
+                        {o.brand ? ` (${o.brand})` : ''} · {Math.round(o.kcal_100g)} kcal/100 g
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <input
+                  type="number"
+                  min="0"
+                  value={f.grams ?? ''}
+                  onChange={(e) => setGrams(i, e.target.value === '' ? null : Number(e.target.value))}
+                  style={{ width: '5.5rem' }}
+                  aria-label="Grams"
+                  title="Grams"
+                />
+                <span style={{ color: 'var(--muted)' }}>g</span>
+              </div>
+              {f.confidence < 0.8 && (
+                <div style={{ color: 'var(--muted)', fontSize: '0.8rem', marginTop: '0.35rem' }}>
+                  Unsure about this match — check it before saving.
+                </div>
+              )}
             </div>
           ))}
 
@@ -204,6 +344,26 @@ export default function SmartLog() {
               </div>
             </div>
           ))}
+
+          {draft.foods?.length > 0 && (
+            <p style={{ color: 'var(--muted)', fontSize: '0.75rem', marginTop: '0.75rem' }}>
+              Food data from{' '}
+              <a href="https://fdc.nal.usda.gov/" target="_blank" rel="noreferrer">
+                USDA FoodData Central
+              </a>
+              {showsOFF && (
+                <>
+                  {' '}
+                  and{' '}
+                  <a href="https://world.openfoodfacts.org/" target="_blank" rel="noreferrer">
+                    Open Food Facts
+                  </a>{' '}
+                  (ODbL)
+                </>
+              )}
+              .
+            </p>
+          )}
 
           <button type="button" className="btn btn-primary btn-block" style={{ marginTop: '1rem' }} disabled={busy} onClick={save}>
             Confirm & save

@@ -13,7 +13,6 @@ from sqlalchemy.pool import StaticPool
 from app.db import Base, get_db
 from app.main import app
 from app.models import ExerciseCatalog, Course, WorkoutSession, WeighIn
-from app.services import nutrition_api
 
 engine = create_engine(
     "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
@@ -165,55 +164,25 @@ def test_n4_enrolling_again_abandons_the_old_course(client, auth, db):
 
 
 # ── N5 ───────────────────────────────────────────────────────────────
-
-def test_n5_barcode_returns_a_draftfood_shape(client, auth, monkeypatch):
-    async def fake(upc):
-        assert upc == "012345678905"
-        return {
-            "food_name": "Protein bar", "brand": "Acme", "calories": 210,
-            "protein": 20, "carbs": 22, "fat": 7, "quantity": 1, "unit": "bar",
-        }
-    # Patch where the router imported it, not the service module.
-    monkeypatch.setattr("app.routers.nutrition.product_by_barcode", fake)
-
-    r = client.get("/api/nutrition/barcode/0-12345-67890-5", headers=auth)
-    assert r.status_code == 200
-    body = r.json()
-    assert body["food_name"] == "Protein bar" and body["upc"] == "012345678905"
-    assert body["quantity"] == 1 and body["unit"] == "bar"
-
-
-def test_n5_unknown_barcode_is_404_not_502(client, auth, monkeypatch):
-    async def none(upc):
-        return None
-    monkeypatch.setattr("app.routers.nutrition.product_by_barcode", none)
-    assert client.get("/api/nutrition/barcode/12345678", headers=auth).status_code == 404
-
+# Barcode lookup now goes through services/food_sources (Open Food Facts, then
+# USDA Branded); its behaviour is covered in test_food_sources.py. Here: the
+# endpoint contract.
 
 def test_n5_bad_barcode_is_rejected_before_the_network(client, auth, monkeypatch):
     called = []
-    async def spy(upc):
-        called.append(upc)
-    monkeypatch.setattr("app.routers.nutrition.product_by_barcode", spy)
+    async def spy(code):
+        called.append(code)
+        return None, []
+    monkeypatch.setattr("app.services.food_sources.lookup_barcode", spy)
     assert client.get("/api/nutrition/barcode/123", headers=auth).status_code == 400
     assert not called
 
 
-def test_n5_service_maps_provider_fields(monkeypatch):
-    import asyncio
-    async def fake_get(path, params):
-        assert path == "search/item" and params == {"upc": "1"}
-        return {"foods": [{
-            "food_name": "Milk", "brand_name": "Farm", "nf_calories": 120,
-            "nf_protein": 8, "nf_total_carbohydrate": 12, "nf_total_fat": 5,
-            "serving_qty": 250, "serving_unit": "ml",
-        }]}
-    monkeypatch.setattr(nutrition_api, "_get_nutrition", fake_get)
-    out = asyncio.run(nutrition_api.product_by_barcode("1"))
-    assert out == {
-        "food_name": "Milk", "brand": "Farm", "calories": 120.0, "protein": 8.0,
-        "carbs": 12.0, "fat": 5.0, "quantity": 250, "unit": "ml",
-    }
+def test_n5_unknown_barcode_is_404_not_502(client, auth, monkeypatch):
+    async def none(code):
+        return None, []
+    monkeypatch.setattr("app.services.food_sources.lookup_barcode", none)
+    assert client.get("/api/nutrition/barcode/12345678", headers=auth).status_code == 404
 
 
 # ── R1 ───────────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 from sqlalchemy.orm import Session
 from rapidfuzz import fuzz
@@ -5,7 +6,7 @@ from rapidfuzz import fuzz
 from ..config import get_settings
 from ..models import ExerciseCatalog, Profile
 from ..schemas import DraftSet, DraftFood, DraftCardio, ParseResponse
-from . import openai_nlp, nutrition_api
+from . import food_sources, openai_nlp, nutrition_api
 
 
 def match_exercise(db: Session, name: str, limit: int = 3) -> list[tuple[ExerciseCatalog, float]]:
@@ -70,11 +71,67 @@ def expand_sets(parsed: list[dict[str, Any]], db: Session) -> list[DraftSet]:
     return drafts
 
 
+# A local match scoring this high covers the query and adds nothing the user
+# did not say; asking the model about it only adds ~2 s of latency.
+CONFIDENT_SCORE = 100.0
+
+
+async def lookup_foods(text: str, items: list[dict] | None = None) -> tuple[list[DraftFood], list[str]]:
+    """Free text -> one DraftFood per item, each carrying every candidate from
+    both sources so the user can switch. Ranking is local first; one OpenAI
+    call then picks per item (USDA's raw top hit for "egg" is a Snickers
+    Egg). Without OpenAI the local ranking stands."""
+    if not items:
+        items = await openai_nlp.parse_food_items(text)
+    items = [i for i in items if isinstance(i, dict) and (i.get("name") or "").strip()][:10]
+    if not items:
+        return [], ["Could not find any foods in that — try '2 eggs and a banana'"]
+
+    searches = await asyncio.gather(*(food_sources.search(i["name"]) for i in items))
+    warnings: list[str] = []
+    for _, w in searches:
+        warnings += [x for x in w if x not in warnings]
+
+    unsure = [n for n, (cands, _) in enumerate(searches) if cands and cands[0].score < CONFIDENT_SCORE]
+    picks = await openai_nlp.pick_food_matches([
+        {
+            "text": " ".join(str(x) for x in (items[n].get("quantity"), items[n].get("unit"), items[n]["name"]) if x),
+            "candidates": [f"{c.name} [{c.brand}]" if c.brand else c.name for c in searches[n][0]],
+        }
+        for n in unsure
+    ]) if unsure else []
+    pick_for = dict(zip(unsure, picks))
+
+    drafts: list[DraftFood] = []
+    for n, item in enumerate(items):
+        cands = searches[n][0]
+        if not cands:
+            warnings.append(f'No match for "{item["name"]}" — try a simpler name')
+            continue
+        picked = pick_for.get(n)
+        selected = picked if picked is not None else 0
+        grams = food_sources.resolve_grams(cands[selected], item.get("grams"), item.get("quantity"))
+        drafts.append(food_sources.to_draft(
+            cands, selected, grams, query=item["name"],
+            quantity=item.get("quantity"), unit=item.get("unit"),
+            # A model-confirmed pick, or a local match that covers the query
+            # and adds nothing, is trusted; anything else asks for a look.
+            confidence=0.9 if picked is not None or cands[0].score >= 100 else 0.6,
+        ))
+    return drafts, warnings
+
+
 async def parse_user_text(db: Session, text: str, profile: Profile | None) -> ParseResponse:
     text = text.strip()
     if not text:
         return ParseResponse(intent="unknown", confidence=0, warnings=["Empty input"], raw_query=text)
 
+    # Most food entries are only food, so the dedicated parser starts on the
+    # whole text alongside the classifier and its result is used if the food
+    # turns out to be all of it. Asking the classifier to also split foods
+    # was tried and named them worse ("rice" for "a bowl of rice", brands
+    # dropped); running both together saves the round trip without that.
+    speculative = asyncio.ensure_future(openai_nlp.parse_food_items(text))
     classification = await openai_nlp.classify_intent(text)
     intent = classification.get("intent") or "strength"
     base_conf = float(classification.get("confidence") or 0.5)
@@ -98,29 +155,19 @@ async def parse_user_text(db: Session, text: str, profile: Profile | None) -> Pa
         except Exception as e:
             warnings.append(f"Strength parse failed: {e}")
 
-    # Food via Nutrition API
+    # Food: split into items, search USDA + Open Food Facts, pick per item.
     if intent in ("food", "mixed") or food_text:
         try:
-            nix_foods = await nutrition_api.natural_nutrients(food_text or text)
-            if not nix_foods:
-                warnings.append("Nutrition API returned no foods — check wording")
-            for f in nix_foods:
-                foods.append(
-                    DraftFood(
-                        food_name=f.get("food_name") or "food",
-                        calories=float(f.get("nf_calories") or 0),
-                        protein=float(f.get("nf_protein") or 0),
-                        carbs=float(f.get("nf_total_carbohydrate") or 0),
-                        fat=float(f.get("nf_total_fat") or 0),
-                        quantity=f.get("serving_qty"),
-                        unit=f.get("serving_unit"),
-                        confidence=0.9 if f.get("nf_calories") is not None else 0.4,
-                    )
-                )
-        except nutrition_api.NutritionAPIError as e:
-            warnings.append(str(e))
+            whole = (food_text or text).strip() == text
+            items = await speculative if whole else None
+            found, food_warnings = await lookup_foods(food_text or text, items=items)
+            foods.extend(found)
+            warnings.extend(food_warnings)
         except Exception as e:
-            warnings.append(f"Food parse failed: {e}")
+            warnings.append(f"Food lookup failed: {e}")
+
+    if not speculative.done():
+        speculative.cancel()
 
     # Cardio / burn via Nutrition API
     burn_query = cardio_text

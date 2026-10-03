@@ -22,14 +22,14 @@ anything, and run `git log --oneline main..HEAD` to see what is unmerged.
   genuinely revokes. Table `refresh_tokens`, migration `0002`.
 - `Base.metadata.create_all()` is gone. `alembic upgrade head` is mandatory
   and the app refuses to serve if the schema is not at head. `0001_initial`
-  is a hand-written frozen baseline; head is `0003`.
+  is a hand-written frozen baseline; head is `0004`.
 - Migration `0003` added portions on food logs, water logs, weigh-in history,
   courses + enrolments, routine targets, and an idempotency key on workouts.
   19 tests in `tests/test_schema_gaps.py`.
 - Compose runs Postgres 16 + a one-shot migrate service + API + nginx with
   TLS. Secrets come from gitignored `deploy/production.env`; bring it up with
   `docker compose --env-file deploy/production.env up -d --build`.
-- 61 backend tests pass. Run them from `backend/`, not the repo root.
+- 85 backend tests pass. Run them from `backend/`, not the repo root.
   `tests/conftest.py` resets the rate limiter per test — without it any file
   with more than ten registrations starts seeing 429s.
 
@@ -67,17 +67,15 @@ falls back to the regex parser on any OpenAI failure. Not done, optional: an
 IndexedDB queue for sets logged without signal (the server already dedupes
 on `client_id`).
 
-### 2. Food data sources
-- **Exercise calories** stay on the 100 Days of Python API, which moved to
-  `https://app.100daysofpython.dev/v1/nutrition` (headers `x-app-id`,
-  `x-app-key`). Its food and barcode endpoints no longer exist. Update
-  `nutrition_api_base_url` and drop the stale fallback bases.
-- **Food:** add USDA FDC search (`/fdc/v1/foods/search`, 3,600 req/hour) and
-  Open Food Facts (`/api/v2/product/{barcode}.json`; send
-  `User-Agent: ForgeFit/<version> (+https://github.com/CSR-VedVikas/ForgeFit)`).
-  Show **"Food data from Open Food Facts"** wherever its results appear — the
-  data is ODbL-licensed and attribution is required.
-- Barcode: Open Food Facts first, USDA Branded (GTIN) as fallback.
+### 2. ~~Food data sources~~ — DONE 3 Oct 2026
+`services/food_sources.py` searches USDA FoodData Central (POST — its
+gateway rejects "(" in GET queries) and Open Food Facts' search service (the
+legacy `/cgi/search.pl` returns 503) in parallel, ranks locally, and caches
+for 24 h. OpenAI splits the sentence into items with grams and is asked to
+pick only when the local ranking is unsure. Smart Log shows every option
+from both sources with editable grams; barcode is Open Food Facts then USDA
+Branded. Logs record `source` and `source_ref` (migration `0004`). Exercise
+calories stay on the 100 Days API at `/v1/nutrition`.
 
 ### 3. Merge to `main`
 Via PR. `main` must only ever show the app as described here.
@@ -111,8 +109,7 @@ Pending; the owner holds its brief.
 ## Definition of done
 
 - ~~`frontend/src/api.js` is gone; a session survives past 15 minutes.~~ Done.
-- Food search offers USDA and Open Food Facts results; barcode works; Open
-  Food Facts attribution is visible; exercise calories work.
+- ~~Food search offers USDA and Open Food Facts results; barcode works.~~ Done.
 - Merged to `main` via PR.
 - Live at the owner's domain over TLS; `/api/health` returns
   `"env":"production"`; a backup has been restored to a scratch database and

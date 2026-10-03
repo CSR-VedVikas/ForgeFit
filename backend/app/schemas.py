@@ -128,15 +128,39 @@ class DraftSet(BaseModel):
     needs_confirm: bool = False
 
 
+class FoodOption(BaseModel):
+    """One database entry, per 100 g. The UI rescales on switch."""
+    source: str  # "usda" | "off"
+    ref: str
+    name: str
+    brand: str = ""
+    kcal_100g: float
+    protein_100g: float = 0
+    carbs_100g: float = 0
+    fat_100g: float = 0
+    serving_g: float | None = None
+    serving_label: str = ""
+
+
 class DraftFood(BaseModel):
     food_name: str
     calories: float
     protein: float = 0
     carbs: float = 0
     fat: float = 0
+    # As the user said it ("2", "bowl"), for display.
     quantity: float | None = None
     unit: str | None = None
     confidence: float = 1.0
+    # The lookup: what was searched, the grams the numbers above are for,
+    # which option is selected, and every option from both sources.
+    query: str = ""
+    grams: float | None = None
+    source: str = ""
+    source_ref: str = ""
+    brand: str = ""
+    selected: int = 0
+    options: list[FoodOption] = []
 
 
 class DraftCardio(BaseModel):
@@ -235,6 +259,10 @@ class FoodLogCreate(BaseModel):
     # N1 — portion. nlp.parse already returns these on DraftFood.
     quantity: Optional[float] = Field(default=None, ge=0)
     unit: str = Field(default="", max_length=32)
+    # "usda" | "off" | "" — and the item's id in that source. Kept so Open
+    # Food Facts entries can be attributed and a meal can be re-looked-up.
+    source: str = Field(default="", max_length=16)
+    source_ref: str = Field(default="", max_length=64)
 
 
 class FoodLogOut(BaseModel):
@@ -250,6 +278,8 @@ class FoodLogOut(BaseModel):
     source_confidence: float
     quantity: Optional[float] = None
     unit: str = ""
+    source: str = ""
+    source_ref: str = ""
 
     class Config:
         from_attributes = True
@@ -435,17 +465,3 @@ class EnrolmentOut(BaseModel):
     sessions_done: int = 0
     sessions_total: int = 0
     is_complete: bool = False
-
-
-# ---- Barcode (N5) ----
-class BarcodeItem(BaseModel):
-    food_name: str
-    brand: str = ""
-    calories: float
-    protein: float = 0
-    carbs: float = 0
-    fat: float = 0
-    quantity: Optional[float] = None
-    unit: Optional[str] = None
-    upc: str
-
