@@ -5,15 +5,21 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+import jwt
+# python-jose was replaced: it carried three advisories (one unfixed) and pulled
+# in ecdsa, which has its own. PyJWT is maintained and does exactly HS256.
+from jwt import PyJWTError as JWTError
+import bcrypt
 from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import get_db
 from .models import User, RefreshToken
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt directly. passlib wrapped it until Oct 2026; it has not been released
+# since 2020 and no longer reads current bcrypt's version. Hashes are the same
+# $2b$ format at cost 12, so every existing password still verifies.
+BCRYPT_ROUNDS = 12
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 settings = get_settings()
 
@@ -44,7 +50,14 @@ def hash_password(password: str) -> str:
             f"Password exceeds {BCRYPT_MAX_BYTES} bytes and cannot be hashed "
             "without silent truncation."
         )
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(BCRYPT_ROUNDS)).decode("ascii")
+
+
+def _checkpw(plain: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8")[:BCRYPT_MAX_BYTES], hashed.encode("ascii"))
+    except ValueError:  # a malformed stored hash is a failed login, not a 500
+        return False
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -55,7 +68,21 @@ def verify_password(plain: str, hashed: str) -> bool:
     passwords can no longer exceed 72 bytes, so this path narrows over time
     and never widens.
     """
-    return pwd_context.verify(plain[:BCRYPT_MAX_BYTES], hashed)
+    return _checkpw(plain, hashed)
+
+
+# A real bcrypt hash of a throwaway value. Login checks a password against it
+# when the email is unknown, so "no such account" costs the same ~bcrypt time
+# as "wrong password" and response timing does not reveal which emails exist.
+_TIMING_DUMMY_HASH = bcrypt.hashpw(b"forgefit-timing-equaliser", bcrypt.gensalt(BCRYPT_ROUNDS)).decode("ascii")
+
+
+def authenticate(db: Session, email: str, password: str) -> User | None:
+    user = db.query(User).filter(User.email == email.lower()).first()
+    if not user:
+        _checkpw(password, _TIMING_DUMMY_HASH)
+        return None
+    return user if verify_password(password, user.password_hash) else None
 
 
 def _encode(claims: dict, expires_delta: timedelta) -> str:
@@ -118,7 +145,7 @@ def revoke_all_for_user(db: Session, user_id: int) -> int:
 def decode_token(token: str, expected_type: str) -> dict:
     payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     if payload.get("type") != expected_type:
-        raise JWTError(f"Expected a {expected_type} token")
+        raise jwt.InvalidTokenError(f"Expected a {expected_type} token")
     return payload
 
 
