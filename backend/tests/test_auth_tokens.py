@@ -196,3 +196,18 @@ def test_prefix_of_a_long_password_is_not_accepted(client):
         json={"email": "edge2@test.com", "password": "p" * 71},
     )
     assert bad.status_code == 401
+
+
+def test_production_serves_no_api_schema(monkeypatch):
+    """Docs pages off is not enough: /openapi.json must go too."""
+    import importlib
+    import app.config as config
+    import app.main as main
+    monkeypatch.setattr(config, "get_settings", lambda: Settings(**PROD))
+    try:
+        reloaded = importlib.reload(main)
+        assert reloaded.app.openapi_url is None
+        assert reloaded.app.docs_url is None and reloaded.app.redoc_url is None
+    finally:
+        monkeypatch.undo()
+        importlib.reload(main)

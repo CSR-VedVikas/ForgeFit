@@ -81,8 +81,14 @@ async def lifespan(app: FastAPI):
     yield
 
 
-docs_url = "/docs" if (settings.enable_docs and not settings.is_production) else None
-redoc_url = "/redoc" if (settings.enable_docs and not settings.is_production) else None
+_docs_on = settings.enable_docs and not settings.is_production
+docs_url = "/docs" if _docs_on else None
+redoc_url = "/redoc" if _docs_on else None
+# Turning the docs pages off leaves FastAPI's schema route on: /openapi.json
+# still listed every endpoint and field in production. Found by probing the
+# production container directly; nginx happened not to route it, which is
+# luck rather than a control.
+openapi_url = "/openapi.json" if _docs_on else None
 
 app = FastAPI(
     title="ForgeFit API",
@@ -90,6 +96,7 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url=docs_url,
     redoc_url=redoc_url,
+    openapi_url=openapi_url,
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

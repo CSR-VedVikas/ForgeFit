@@ -1,0 +1,36 @@
+# Keep the build context to what the images need.
+#
+# Without this, a local `docker compose build` copied backend/.env — real API
+# keys — into the backend image via `COPY backend/ .`, along with the Windows
+# virtualenv, the SQLite databases, and frontend/node_modules (which then
+# overwrote the Linux install inside the build). A clean server clone has none
+# of those, but local builds did, and every build also uploaded .git.
+
+.git
+.gitignore
+**/.DS_Store
+**/__pycache__
+**/*.pyc
+
+# Secrets and local data — never in an image.
+**/.env
+**/.env.*
+!**/.env.example
+deploy/production.env
+deploy/certs
+deploy/certbot
+**/*.pem
+**/*.key
+**/*.db
+**/*.db.bak-*
+backups
+
+# Local environments and build output.
+backend/.venv
+backend/.pytest_cache
+frontend/node_modules
+frontend/dist
+
+# Not needed to build or run.
+HANDOFF.md
+**/tests
