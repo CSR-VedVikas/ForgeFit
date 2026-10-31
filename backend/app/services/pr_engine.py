@@ -46,6 +46,10 @@ def apply_prs_and_achievements(
     streak covers; it defaults to UTC for callers outside a request."""
     clock = clock or UserClock()
     new_achievements: list[Achievement] = []
+    # Records and achievements are dated by the session, not by the save. A
+    # workout logged offline and synced later, or entered after the fact,
+    # was otherwise stamped "now" and counted toward the current week.
+    when = session.started_at or datetime.utcnow()
 
     prior_count = (
         db.query(WorkoutSession)
@@ -150,7 +154,7 @@ def apply_prs_and_achievements(
                 exercise_id=exercise_id,
                 record_type=record_type,
                 value=value,
-                achieved_at=datetime.utcnow(),
+                achieved_at=when,
                 workout_set_id=s.id,
             )
             db.add(row)
@@ -158,7 +162,7 @@ def apply_prs_and_achievements(
             is_pr = True
         elif value > row.value:
             row.value = value
-            row.achieved_at = datetime.utcnow()
+            row.achieved_at = when
             row.workout_set_id = s.id
             is_pr = True
         else:
@@ -194,8 +198,13 @@ def apply_prs_and_achievements(
         db.add(ach)
 
     session.total_volume = sum(x.volume for x in sets)
-    _update_challenge(db, user_id, session.total_volume, new_achievements, clock)
+    _update_challenge(
+        db, user_id, session.total_volume, new_achievements, clock,
+        week=clock.week_start(clock.local_date(when)),
+    )
     _check_streak(db, user_id, new_achievements, clock)
+    for ach in new_achievements:
+        ach.earned_at = when
     db.flush()
     return new_achievements
 
@@ -206,8 +215,10 @@ def _update_challenge(
     added_volume: float,
     new_achievements: list[Achievement],
     clock: UserClock,
+    week=None,
 ) -> None:
-    ws = clock.week_start()
+    # The week the session belongs to — not necessarily this one.
+    ws = week or clock.week_start()
     challenge = (
         db.query(ChallengeProgress)
         .filter(ChallengeProgress.user_id == user_id, ChallengeProgress.week_start == ws)
