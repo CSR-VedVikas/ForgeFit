@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
-from jose import JWTError
+from jwt import PyJWTError as JWTError
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -24,6 +24,7 @@ from ..schemas import (
 from ..auth import (
     hash_password,
     verify_password,
+    authenticate,
     create_access_token,
     issue_refresh_token,
     hash_refresh_token,
@@ -124,8 +125,8 @@ def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.email == form_data.username.lower()).first()
-    if not user or not verify_password(form_data.password, user.password_hash):
+    user = authenticate(db, form_data.username, form_data.password)
+    if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     return _issue_session(db, response, user.id, request.headers.get("user-agent", ""))
 
@@ -138,8 +139,8 @@ def login_json(
     response: Response,
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.email == payload.email.lower()).first()
-    if not user or not verify_password(payload.password, user.password_hash):
+    user = authenticate(db, payload.email, payload.password)
+    if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     return _issue_session(db, response, user.id, request.headers.get("user-agent", ""))
 
@@ -265,8 +266,10 @@ def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Sessio
     reset_path = f"/reset-password?token={raw}"
     logger.info('"password_reset":"issued","user_id":%s', user.id)
 
-    # Dev/local: no SMTP yet — return token so you can test recovery in the UI
-    if not settings.is_production:
+    # No email delivery exists yet, so in development the token can be handed
+    # back to test recovery in the UI — but only with EXPOSE_RESET_TOKEN set,
+    # which the production validator refuses. Never infer it from ENVIRONMENT.
+    if settings.expose_reset_token and not settings.is_production:
         return ForgotPasswordResponse(
             message=generic + " (Dev mode: use the token below.)",
             reset_token=raw,

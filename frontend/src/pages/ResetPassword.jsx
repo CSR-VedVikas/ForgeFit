@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
@@ -8,6 +8,15 @@ export default function ResetPassword() {
   const [params] = useSearchParams()
   const initialToken = useMemo(() => params.get('token') || '', [params])
   const [token, setToken] = useState(initialToken)
+
+  // The reset link carries a live credential in its query string. Once it is
+  // in component state, drop it from the address bar so it is not left in
+  // browser history, bookmarks, or a screenshot of the URL.
+  useEffect(() => {
+    if (initialToken && window.location.search.includes('token=')) {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [initialToken])
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')

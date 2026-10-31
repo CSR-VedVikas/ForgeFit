@@ -24,6 +24,9 @@ PROD = {
     "database_url": "postgresql://u:p@localhost/forgefit",
     "enable_docs": False,
     "cors_origins": "https://forgefit.example.com",
+    # Settings also reads backend/.env; a developer's local flags must not
+    # decide whether these production-config tests pass.
+    "expose_reset_token": False,
 }
 
 
@@ -211,3 +214,45 @@ def test_production_serves_no_api_schema(monkeypatch):
     finally:
         monkeypatch.undo()
         importlib.reload(main)
+
+
+# ── password reset ───────────────────────────────────────────────────
+
+def test_reset_token_is_never_returned_unless_explicitly_enabled(client, monkeypatch):
+    """The account-takeover guard: a server started without ENVIRONMENT (so it
+    defaults to development) must not hand out reset tokens."""
+    import app.routers.auth as auth_router
+    register(client, email="victim@test.com")
+    monkeypatch.setattr(auth_router.settings, "expose_reset_token", False)
+    r = client.post("/api/auth/forgot-password", json={"email": "victim@test.com"})
+    assert r.status_code == 200
+    assert not r.json().get("reset_token")
+
+
+def test_reset_response_is_identical_for_known_and_unknown_emails(client, monkeypatch):
+    import app.routers.auth as auth_router
+    register(client, email="known@test.com")
+    monkeypatch.setattr(auth_router.settings, "expose_reset_token", False)
+    known = client.post("/api/auth/forgot-password", json={"email": "known@test.com"}).json()
+    unknown = client.post("/api/auth/forgot-password", json={"email": "nobody@test.com"}).json()
+    assert known == unknown
+
+
+def test_dev_flag_enables_the_full_reset_flow_and_kills_old_sessions(client, db, monkeypatch):
+    import app.routers.auth as auth_router
+    register(client, email="dev@test.com")
+    monkeypatch.setattr(auth_router.settings, "expose_reset_token", True)
+    token = client.post("/api/auth/forgot-password", json={"email": "dev@test.com"}).json()["reset_token"]
+    assert token
+    r = client.post("/api/auth/reset-password", json={"token": token, "new_password": "brand-new-pass"})
+    assert r.status_code == 200
+    assert all(rt.revoked for rt in db.query(RefreshToken).all())
+    # single use
+    again = client.post("/api/auth/reset-password", json={"token": token, "new_password": "another-pass1"})
+    assert again.status_code == 400
+
+
+def test_production_refuses_to_start_with_the_reset_flag_on():
+    with pytest.raises(ValueError) as exc:
+        Settings(**{**PROD, "expose_reset_token": True})
+    assert "EXPOSE_RESET_TOKEN" in str(exc.value)

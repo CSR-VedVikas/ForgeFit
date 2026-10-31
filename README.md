@@ -96,7 +96,8 @@ Copy `backend/.env.example` → `backend/.env` for development, or `deploy/produ
 | `DATABASE_URL` | SQLite locally; PostgreSQL required in production |
 | `CORS_ORIGINS` | Comma-separated allowlist. Required in production |
 | `ENVIRONMENT` | `development` or `production` |
-| `ENABLE_DOCS` | Swagger/ReDoc. Forced off in production regardless |
+| `ENABLE_DOCS` | Swagger/ReDoc and `/openapi.json`. Forced off in production regardless |
+| `EXPOSE_RESET_TOKEN` | Development only: return the password-reset token in the API response (there is no email delivery yet). Production refuses to start with it on |
 | `BEHIND_PROXY` / `TRUSTED_PROXY_HOPS` | Read real client IPs from `X-Forwarded-For`. Only enable behind a proxy that overwrites it |
 | `RATE_LIMIT_AUTH` / `RATE_LIMIT_NLP` | slowapi limits |
 | `MAX_NLP_CHARS` | Cap on NLP input length |
@@ -114,6 +115,7 @@ The API **refuses to start** in production if any of these is true:
 - `DATABASE_URL` is SQLite
 - `ENABLE_DOCS` is true
 - `CORS_ORIGINS` is empty
+- `EXPOSE_RESET_TOKEN` is true
 
 Failing to boot is deliberate. A server that starts with the shipped dev secret signs tokens anyone can forge, and nothing in the logs says so.
 

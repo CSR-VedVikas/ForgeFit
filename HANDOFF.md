@@ -29,7 +29,7 @@ anything, and run `git log --oneline main..HEAD` to see what is unmerged.
 - Compose runs Postgres 16 + a one-shot migrate service + API + nginx with
   TLS. Secrets come from gitignored `deploy/production.env`; bring it up with
   `docker compose --env-file deploy/production.env up -d --build`.
-- 85 backend tests pass. Run them from `backend/`, not the repo root.
+- 97 backend tests pass. Run them from `backend/`, not the repo root.
   `tests/conftest.py` resets the rate limiter per test — without it any file
   with more than ten registrations starts seeing 429s.
 

@@ -24,6 +24,7 @@ settings = get_settings()
 
 # N2 — 35 ml per kg of body weight, the figure the Fuel screen was designed to.
 WATER_ML_PER_KG = 35
+MAX_BATCH = 50
 
 
 def _entry_from(payload: FoodLogCreate, user_id: int) -> FoodLog:
@@ -62,6 +63,10 @@ def log_food(payload: FoodLogCreate, user: CurrentUser, db: Session = Depends(ge
 
 @router.post("/log/batch", response_model=list[FoodLogOut])
 def log_food_batch(payload: list[FoodLogCreate], user: CurrentUser, db: Session = Depends(get_db)):
+    # A meal is a handful of foods. Unbounded, one request could insert any
+    # number of rows; nginx's 2 MB body cap alone allowed ~10,000.
+    if len(payload) > MAX_BATCH:
+        raise HTTPException(400, f"At most {MAX_BATCH} foods per save")
     entries = [_entry_from(item, user.id) for item in payload]
     db.add_all(entries)
     db.commit()

@@ -251,3 +251,32 @@ def test_w1_omitting_client_id_still_inserts_every_time(client, auth, db):
     client.post("/api/workouts", json=body, headers=auth)
     client.post("/api/workouts", json=body, headers=auth)
     assert db.query(WorkoutSession).count() == 2
+
+
+# ── input bounds ─────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("bad_set", [
+    {"exercise_id": "0025", "weight_kg": 10000, "reps": 5},  # an unbeatable fake PR
+    {"exercise_id": "0025", "weight_kg": -20, "reps": 5},
+    {"exercise_id": "0025", "weight_kg": 60, "reps": 0},
+    {"exercise_id": "0025", "weight_kg": 60, "reps": -3},
+])
+def test_impossible_sets_are_rejected(client, auth, bad_set):
+    assert client.post("/api/workouts", json={"sets": [bad_set]}, headers=auth).status_code == 422
+
+
+def test_food_log_rejects_negative_calories_and_oversized_batches(client, auth):
+    assert client.post("/api/nutrition/log", json={"food_name": "x", "calories": -500}, headers=auth).status_code == 422
+    many = [{"food_name": f"f{i}", "calories": 1} for i in range(51)]
+    assert client.post("/api/nutrition/log/batch", json=many, headers=auth).status_code == 400
+    assert client.post("/api/nutrition/log/batch", json=many[:50], headers=auth).status_code == 200
+
+
+def test_profile_rejects_impossible_body_metrics(client, auth):
+    for bad in ({"weight_kg": -70}, {"height_cm": 5}, {"age": 400}, {"daily_calorie_goal": 0}):
+        assert client.put("/api/profile", json=bad, headers=auth).status_code == 422, bad
+
+
+def test_chart_ranges_are_capped(client, auth):
+    assert client.get("/api/stats/activity?days=100000", headers=auth).status_code == 422
+    assert client.get("/api/stats/activity?days=90", headers=auth).status_code == 200
