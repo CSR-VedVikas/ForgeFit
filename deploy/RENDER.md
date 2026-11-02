@@ -24,6 +24,15 @@ a direct call would need a `SameSite=None` cookie, which Safari blocks.
 3. Copy the connection string (`postgresql://…?sslmode=require`). The app
    points it at psycopg 3 itself, so paste it as Neon gives it.
 
+**"action restricted: organization is managed by Vercel".** The Neon account
+was first linked through Vercel, and that organization's projects can only be
+created from Vercel. Either switch to a personal organization in the Neon
+console's top-left menu, or create the database from Vercel: **Storage →
+Create Database → Neon**, Free plan, region Singapore. Then copy
+`DATABASE_URL_UNPOOLED` from the database's `.env.local` tab. Use the
+unpooled (direct) URL: the pooled one runs through PgBouncer, which does not
+suit migrations or psycopg's prepared statements.
+
 ## 2. Render: create both services from the Blueprint
 
 1. Sign up at render.com with GitHub and allow access to the ForgeFit repository.
