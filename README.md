@@ -153,6 +153,13 @@ Upgrading a database created before Alembic was wired in (it will have no `alemb
 cd backend && alembic stamp 0001 && alembic upgrade head
 ```
 
+## Production (Render, free)
+
+`render.yaml` deploys the API as a free Python web service and the app as a
+static site that forwards `/api` and `/media` to it, with a free Neon
+Postgres database. Step by step, including the free-tier caveats:
+[`deploy/RENDER.md`](deploy/RENDER.md).
+
 ## Production (Docker)
 
 ```bash

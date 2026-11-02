@@ -82,6 +82,16 @@ def test_production_refuses_unsafe_config(override, expected):
     assert expected in str(exc.value)
 
 
+@pytest.mark.parametrize("given", [
+    "postgres://u:p@db.example.com/forgefit?sslmode=require",
+    "postgresql://u:p@db.example.com/forgefit?sslmode=require",
+    "postgresql+psycopg://u:p@db.example.com/forgefit?sslmode=require",
+])
+def test_a_hosted_postgres_url_is_pointed_at_psycopg_3(given):
+    url = Settings(**{**PROD, "database_url": given}).database_url
+    assert url == "postgresql+psycopg://u:p@db.example.com/forgefit?sslmode=require"
+
+
 def test_development_tolerates_the_dev_defaults():
     s = Settings(environment="development", jwt_secret="dev-secret-change-me")
     assert not s.is_production

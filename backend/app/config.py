@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # The value shipped in .env.example. Treated as "unset" in production.
@@ -69,6 +69,17 @@ class Settings(BaseSettings):
     trusted_proxy_hops: int = 1
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("database_url")
+    @classmethod
+    def _use_the_installed_driver(cls, url: str) -> str:
+        """Hosted Postgres (Neon, Render, Heroku) hands out postgres:// or
+        postgresql:// URLs, which SQLAlchemy maps to psycopg2. The installed
+        driver is psycopg 3, so name it rather than fail at the first query."""
+        for prefix in ("postgres://", "postgresql://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg://" + url[len(prefix):]
+        return url
 
     @property
     def cors_origin_list(self) -> list[str]:

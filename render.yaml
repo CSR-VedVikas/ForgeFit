@@ -1,0 +1,101 @@
+# Render Blueprint: the API as a free Python web service, the React app as a
+# free static site. The static site forwards /api and /media to the API, so
+# the browser sees one origin and the SameSite=lax refresh cookie keeps
+# working (onrender.com subdomains are separate sites to a browser).
+#
+# The database is not defined here: Render's free Postgres is deleted after
+# 30 days. Use a free Neon database and paste its URL when prompted.
+#
+# If Render gives a service a different URL than the names below (a name can
+# be taken), update CORS_ORIGINS and the two rewrite destinations to match.
+# Step-by-step guide: deploy/RENDER.md.
+
+services:
+  - type: web
+    name: forgefit-api
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: ENVIRONMENT
+        value: production
+      - key: ENABLE_DOCS
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://forgefit.onrender.com
+      # Client -> static-site proxy -> Render's load balancer -> app.
+      # Check after the first deploy (deploy/RENDER.md, step 6).
+      - key: BEHIND_PROXY
+        value: "true"
+      - key: TRUSTED_PROXY_HOPS
+        value: "2"
+      - key: NUTRITION_API_BASE_URL
+        value: https://app.100daysofpython.dev/v1/nutrition
+      # Prompted for once, when the Blueprint is first created.
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: USDA_FDC_API_KEY
+        sync: false
+      - key: NUTRITION_APP_ID
+        sync: false
+      - key: NUTRITION_APP_KEY
+        sync: false
+
+  - type: web
+    name: forgefit
+    runtime: static
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: ./frontend/dist
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://forgefit-api.onrender.com/api/*
+      - type: rewrite
+        source: /media/*
+        destination: https://forgefit-api.onrender.com/media/*
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # The same headers deploy/nginx.conf sends.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+      - path: /*
+        name: Cross-Origin-Opener-Policy
+        value: same-origin
+      # A stale shell must never outlive a deploy.
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable

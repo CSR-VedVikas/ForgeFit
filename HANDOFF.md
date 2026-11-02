@@ -32,7 +32,7 @@ anything, and run `git log --oneline main..HEAD` to see what is unmerged.
 - Records, achievements and the weekly challenge are dated by the session's
   own `started_at`, so a workout synced days late counts toward the week it
   was trained in.
-- 99 backend tests pass. Run them from `backend/`, not the repo root.
+- 102 backend tests pass. Run them from `backend/`, not the repo root.
   `tests/conftest.py` resets the rate limiter per test — without it any file
   with more than ten registrations starts seeing 429s.
 
