@@ -177,3 +177,29 @@ def test_intent_classify_falls_back_too(monkeypatch):
     monkeypatch.setattr(openai_nlp, "_client", lambda: _Failing())
     out = asyncio.run(openai_nlp.classify_intent("bench press 3x8 at 60kg"))
     assert out.get("intent")
+
+
+# ── sessions dated in the past ───────────────────────────────────────
+
+def test_a_past_session_counts_toward_its_own_week_and_keeps_its_date(client, auth, db):
+    from app.models import ChallengeProgress, PersonalRecord
+    past = "2026-09-07T07:00:00+05:30"  # a Monday, well before "now"
+    r = client.post("/api/workouts", headers={**auth, **IST}, json={
+        "started_at": past, "ended_at": "2026-09-07T08:00:00+05:30",
+        "sets": [{"exercise_id": "0025", "weight_kg": 60, "reps": 5}],
+    })
+    assert r.status_code == 200
+    weeks = [c.week_start for c in db.query(ChallengeProgress).all()]
+    assert weeks == [date(2026, 9, 7)], weeks  # its own week, not the current one
+    pr = db.query(PersonalRecord).first()
+    assert pr.achieved_at == datetime(2026, 9, 7, 1, 30)  # 07:00 IST, not "now"
+
+
+def test_achievements_from_a_past_session_carry_its_date(client, auth, db):
+    from app.models import Achievement
+    client.post("/api/workouts", headers={**auth, **IST}, json={
+        "started_at": "2026-09-07T07:00:00+05:30",
+        "sets": [{"exercise_id": "0025", "weight_kg": 60, "reps": 5}],
+    })
+    stamps = {a.earned_at for a in db.query(Achievement).all()}
+    assert stamps == {datetime(2026, 9, 7, 1, 30)}
